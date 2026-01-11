@@ -32,6 +32,9 @@ tracing = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# CLI
+clap = { version = "4", features = ["derive"] }
+
 # Image rendering
 ab_glyph = "0.2"
 font-kit = "0.14"
