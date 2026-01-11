@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 
@@ -102,6 +102,8 @@ pub struct Terminal {
     _reader_handle: tokio::task::JoinHandle<()>,
     /// Flag indicating if the process has exited.
     exited: Arc<Mutex<Option<i32>>>,
+    /// The child process.
+    child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
 }
 
 impl Terminal {
@@ -143,7 +145,7 @@ impl Terminal {
             cmd_builder.cwd(cwd);
         }
 
-        let _child = pair
+        let child = pair
             .slave
             .spawn_command(cmd_builder)
             .map_err(|e| TermwrightError::SpawnFailed(e.to_string()))?;
@@ -212,6 +214,7 @@ impl Terminal {
             config,
             _reader_handle: reader_handle,
             exited,
+            child: Arc::new(Mutex::new(child)),
         })
     }
 
@@ -325,8 +328,10 @@ impl Terminal {
 
     /// Kill the terminal process.
     pub async fn kill(&self) -> Result<()> {
-        // Send SIGTERM via Ctrl+C
-        self.send_key(Key::Ctrl('c')).await?;
+        let mut child = self.child.lock().await;
+        child
+            .kill()
+            .map_err(|e| TermwrightError::SpawnFailed(format!("Failed to kill process: {}", e)))?;
         Ok(())
     }
 
