@@ -59,6 +59,7 @@
 //! - [`error`]: Error types
 //! - [`prelude`]: Convenient re-exports
 
+pub mod daemon;
 pub mod error;
 pub mod input;
 pub mod output;

@@ -94,7 +94,40 @@ Get JSON output for AI processing:
 termwright run --format json -- htop
 ```
 
+### Daemon Usage
+
+The `daemon` subcommand runs a long-lived terminal session and exposes a local Unix socket for automation. This is useful when you want to keep an app running and interact with it incrementally (similar to how Playwright keeps a browser process alive).
+
+Start a daemon (foreground; blocks until you close it):
+
+```bash
+termwright daemon -- vim test.txt
+# prints a socket path like:
+# /tmp/termwright-12345.sock
+```
+
+Start a daemon in the background (returns immediately):
+
+```bash
+SOCK=$(termwright daemon --background -- vim test.txt)
+echo "$SOCK"
+```
+
+Stop a daemon (sends a `close` request):
+
+```bash
+printf '{"id":1,"method":"close","params":null}\n' | nc -U "$SOCK"
+```
+
 ## CLI Reference
+
+### `termwright fonts`
+
+List available font families on the system (helpful for selecting a monospace font for screenshots).
+
+```
+termwright fonts
+```
 
 ### `termwright run`
 
@@ -129,6 +162,63 @@ Options:
   --font-size <SIZE>     Font size in pixels [default: 14]
   --timeout <SECS>       Timeout for wait conditions [default: 30]
 ```
+
+### `termwright daemon`
+
+Run a single TUI session and expose it over a Unix socket.
+
+```
+termwright daemon [OPTIONS] -- <COMMAND> [ARGS]...
+
+Options:
+  --cols <COLS>          Terminal width [default: 80]
+  --rows <ROWS>          Terminal height [default: 24]
+  --socket <PATH>        Unix socket path (defaults to a temp path)
+  --background           Start daemon in the background
+```
+
+The command prints the socket path to stdout.
+
+## Daemon User Guide
+
+### Connecting from Rust
+
+```rust
+use std::time::Duration;
+use termwright::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = DaemonClient::connect_unix("/tmp/termwright-12345.sock").await?;
+
+    // Sanity check: talk to the server
+    let info = client.handshake().await?;
+    println!("daemon pid={}", info.pid);
+
+    // Wait and read screen
+    client.wait_for_text("VIM", Some(Duration::from_secs(5))).await?;
+    println!("{}", client.screen_text().await?);
+
+    // Keyboard
+    client.press("Escape").await?;
+    client.hotkey_ctrl('r').await?;
+    client.r#type(":q!\n").await?;
+
+    // Mouse (row/col are 0-based cell coordinates)
+    client.mouse_move(10, 10).await?;
+    client.mouse_click(10, 10, MouseButton::Left).await?;
+
+    // Shut down daemon + child process
+    client.close().await?;
+    Ok(())
+}
+```
+
+### Notes / Caveats
+
+- The daemon is local-only: it listens on a Unix socket you control.
+- Mouse events are best-effort: many TUIs ignore mouse input unless they explicitly enable mouse reporting.
+- Coordinate system for `mouse_move`/`mouse_click` is `row`/`col` in terminal cells (0-based).
 
 ## API Overview
 

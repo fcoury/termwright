@@ -62,4 +62,12 @@ pub enum TermwrightError {
     /// Font loading error.
     #[error("Font error: {0}")]
     Font(String),
+
+    /// IPC transport error (daemon).
+    #[error("IPC error: {0}")]
+    Ipc(String),
+
+    /// Protocol/serialization error (daemon).
+    #[error("Protocol error: {0}")]
+    Protocol(String),
 }

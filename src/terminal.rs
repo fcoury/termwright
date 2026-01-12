@@ -6,19 +6,28 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
+use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 
 use crate::error::{Result, TermwrightError};
-use crate::input::Key;
+use crate::input::{Key, MouseButton};
 use crate::screen::Screen;
-use crate::wait::{WaitBuilder, WaitCondition, DEFAULT_TIMEOUT};
+use crate::wait::{DEFAULT_TIMEOUT, WaitBuilder, WaitCondition};
 
 /// Default terminal width.
 pub const DEFAULT_COLS: u16 = 80;
 /// Default terminal height.
 pub const DEFAULT_ROWS: u16 = 24;
+
+fn encode_sgr_mouse(code: u8, row: u16, col: u16, pressed: bool) -> Vec<u8> {
+    // SGR (1006) mouse encoding.
+    // Coordinates are 1-based.
+    let row = row.saturating_add(1);
+    let col = col.saturating_add(1);
+    let suffix = if pressed { 'M' } else { 'm' };
+    format!("\u{1b}[<{};{};{}{}", code, col, row, suffix).into_bytes()
+}
 
 /// Configuration for the terminal.
 #[derive(Debug, Clone)]
@@ -92,6 +101,8 @@ impl TerminalBuilder {
 
 /// A terminal instance wrapping a PTY.
 pub struct Terminal {
+    /// PTY master handle (used for resize).
+    master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
     /// Writer to send input to the PTY.
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     /// The vt100 parser for terminal emulation.
@@ -113,11 +124,7 @@ impl Terminal {
     }
 
     /// Spawn a command with the given configuration.
-    async fn spawn_with_config(
-        cmd: &str,
-        args: &[&str],
-        config: TerminalConfig,
-    ) -> Result<Self> {
+    async fn spawn_with_config(cmd: &str, args: &[&str], config: TerminalConfig) -> Result<Self> {
         let pty_system = native_pty_system();
 
         let pair = pty_system
@@ -150,13 +157,13 @@ impl Terminal {
             .spawn_command(cmd_builder)
             .map_err(|e| TermwrightError::SpawnFailed(e.to_string()))?;
 
-        let reader = pair
-            .master
+        let master = pair.master;
+
+        let reader = master
             .try_clone_reader()
             .map_err(|e| TermwrightError::SpawnFailed(e.to_string()))?;
 
-        let writer = pair
-            .master
+        let writer = master
             .take_writer()
             .map_err(|e| TermwrightError::SpawnFailed(e.to_string()))?;
 
@@ -209,6 +216,7 @@ impl Terminal {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         Ok(Self {
+            master: Arc::new(Mutex::new(master)),
             writer: Arc::new(Mutex::new(Box::new(writer))),
             parser,
             config,
@@ -261,6 +269,64 @@ impl Terminal {
         Ok(self)
     }
 
+    /// Resize the PTY.
+    pub async fn resize(&self, cols: u16, rows: u16) -> Result<&Self> {
+        let master = self.master.lock().await;
+        master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| {
+                TermwrightError::Pty(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
+        Ok(self)
+    }
+
+    /// Move the mouse cursor (hover).
+    ///
+    /// Note: Many TUIs ignore this unless mouse reporting is enabled.
+    pub async fn mouse_move(
+        &self,
+        row: u16,
+        col: u16,
+        held_buttons: Vec<MouseButton>,
+    ) -> Result<&Self> {
+        let base_code = held_buttons
+            .first()
+            .copied()
+            .map(|b| b.press_code())
+            .unwrap_or(3);
+
+        let code = base_code.saturating_add(32);
+        let bytes = encode_sgr_mouse(code, row, col, true);
+        self.send_raw(&bytes).await
+    }
+
+    /// Click a mouse button at the given cell position.
+    pub async fn mouse_click(&self, row: u16, col: u16, button: MouseButton) -> Result<&Self> {
+        self.mouse_down(row, col, button).await?;
+        self.mouse_up(row, col).await
+    }
+
+    /// Press a mouse button at the given cell position.
+    pub async fn mouse_down(&self, row: u16, col: u16, button: MouseButton) -> Result<&Self> {
+        let code = button.press_code();
+        let bytes = encode_sgr_mouse(code, row, col, true);
+        self.send_raw(&bytes).await
+    }
+
+    /// Release any mouse button at the given cell position.
+    pub async fn mouse_up(&self, row: u16, col: u16) -> Result<&Self> {
+        let bytes = encode_sgr_mouse(3, row, col, false);
+        self.send_raw(&bytes).await
+    }
+
     /// Wait for specific text to appear on screen.
     pub fn expect(&self, text: &str) -> ExpectBuilder<'_> {
         ExpectBuilder {
@@ -303,8 +369,7 @@ impl Terminal {
 
     /// Wait for the process to exit.
     pub async fn wait_exit(&self) -> Result<i32> {
-        let wait = WaitBuilder::new(WaitCondition::ProcessExit)
-            .timeout(self.config.timeout);
+        let wait = WaitBuilder::new(WaitCondition::ProcessExit).timeout(self.config.timeout);
 
         let deadline = Instant::now() + wait.get_timeout();
 
@@ -425,7 +490,8 @@ impl<'a> ExpectBuilder<'a> {
 // Allow awaiting ExpectBuilder directly
 impl<'a> std::future::IntoFuture for ExpectBuilder<'a> {
     type Output = Result<()>;
-    type IntoFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Self::Output> + Send + 'a>>;
+    type IntoFuture =
+        std::pin::Pin<Box<dyn std::future::Future<Output = Self::Output> + Send + 'a>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.await_condition())
