@@ -12,6 +12,14 @@ use crate::terminal::Terminal;
 
 const PROTOCOL_VERSION: u32 = 1;
 
+/// Result from serving a client connection.
+enum ClientResult {
+    /// Client disconnected normally, ready to accept next client.
+    Continue,
+    /// Client sent `close` command, daemon should exit.
+    Close,
+}
+
 pub struct DaemonConfig {
     pub socket_path: PathBuf,
 }
@@ -32,7 +40,7 @@ pub async fn run_daemon(config: DaemonConfig, terminal: Terminal) -> Result<()> 
     let listener = UnixListener::bind(&socket_path)
         .map_err(|e| TermwrightError::Ipc(format!("failed to bind socket: {e}")))?;
 
-    let result = accept_one_client(listener, &terminal).await;
+    let result = accept_clients(listener, &terminal).await;
 
     // Best-effort cleanup
     let _ = terminal.kill().await;
@@ -41,16 +49,52 @@ pub async fn run_daemon(config: DaemonConfig, terminal: Terminal) -> Result<()> 
     result
 }
 
-async fn accept_one_client(listener: UnixListener, terminal: &Terminal) -> Result<()> {
-    let (stream, _) = listener
-        .accept()
-        .await
-        .map_err(|e| TermwrightError::Ipc(format!("accept failed: {e}")))?;
+/// Accept multiple client connections until `close` is called or process exits.
+async fn accept_clients(listener: UnixListener, terminal: &Terminal) -> Result<()> {
+    loop {
+        // Check if the spawned process has exited
+        if terminal.has_exited().await {
+            return Ok(());
+        }
 
-    serve_client(stream, terminal).await
+        // Accept with a timeout so we can periodically check process status
+        let accept_result = tokio::time::timeout(
+            Duration::from_millis(500),
+            listener.accept(),
+        )
+        .await;
+
+        let stream = match accept_result {
+            Ok(Ok((stream, _))) => stream,
+            Ok(Err(e)) => {
+                return Err(TermwrightError::Ipc(format!("accept failed: {e}")));
+            }
+            Err(_) => {
+                // Timeout - loop back to check process status
+                continue;
+            }
+        };
+
+        // Serve this client; if they send `close`, we exit the loop
+        match serve_client(stream, terminal).await {
+            Ok(ClientResult::Continue) => {
+                // Client disconnected normally, accept next client
+                continue;
+            }
+            Ok(ClientResult::Close) => {
+                // Client sent `close` command
+                return Ok(());
+            }
+            Err(e) => {
+                // Log error but keep accepting clients
+                eprintln!("Client error: {e}");
+                continue;
+            }
+        }
+    }
 }
 
-async fn serve_client(stream: UnixStream, terminal: &Terminal) -> Result<()> {
+async fn serve_client(stream: UnixStream, terminal: &Terminal) -> Result<ClientResult> {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
 
@@ -61,7 +105,8 @@ async fn serve_client(stream: UnixStream, terminal: &Terminal) -> Result<()> {
             .await
             .map_err(|e| TermwrightError::Ipc(format!("read failed: {e}")))?;
         if n == 0 {
-            break;
+            // Client disconnected, ready for next client
+            return Ok(ClientResult::Continue);
         }
 
         let req: Request = match serde_json::from_str(&line) {
@@ -77,11 +122,10 @@ async fn serve_client(stream: UnixStream, terminal: &Terminal) -> Result<()> {
         write_response(&mut write_half, &resp).await?;
 
         if resp.error.as_ref().is_some_and(|e| e.code == "closing") {
-            break;
+            // Client sent `close` command, daemon should exit
+            return Ok(ClientResult::Close);
         }
     }
-
-    Ok(())
 }
 
 async fn write_response(
