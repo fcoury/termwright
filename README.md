@@ -119,6 +119,154 @@ Stop a daemon (sends a `close` request):
 printf '{"id":1,"method":"close","params":null}\n' | nc -U "$SOCK"
 ```
 
+## Shell Scripting Quick Start
+
+The daemon mode makes termwright ideal for shell-based E2E testing of TUI applications. Here's how to get started:
+
+### Prerequisites
+
+```bash
+# Install termwright
+cargo install termwright
+
+# Install helper tools
+brew install socat jq  # macOS
+# or: sudo apt-get install socat jq  # Ubuntu/Debian
+```
+
+### Basic Pattern
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# 1. Start the daemon with your TUI app
+SOCK="/tmp/my-test-$$.sock"
+termwright daemon --socket "$SOCK" --cols 80 --rows 24 -- ./my-tui-app &
+
+# Wait for socket
+while [ ! -S "$SOCK" ]; do sleep 0.1; done
+
+# 2. Helper function to send commands
+tw() {
+    echo "$1" | socat - UNIX-CONNECT:"$SOCK"
+}
+
+# 3. Wait for app to be ready
+tw '{"id":1,"method":"wait_for_text","params":{"text":"Welcome","timeout_ms":5000}}'
+
+# 4. Interact with the app
+tw '{"id":2,"method":"press","params":{"key":"Enter"}}'
+tw '{"id":3,"method":"type","params":{"text":"hello world"}}'
+tw '{"id":4,"method":"hotkey","params":{"ctrl":true,"ch":"s"}}'  # Ctrl+S
+
+# 5. Read screen content
+SCREEN=$(tw '{"id":5,"method":"screen","params":{"format":"text"}}' | jq -r '.result')
+echo "$SCREEN"
+
+# 6. Take a screenshot
+RESULT=$(tw '{"id":6,"method":"screenshot","params":{}}')
+echo "$RESULT" | jq -r '.result.png_base64' | base64 -d > screenshot.png
+
+# 7. Clean up
+tw '{"id":99,"method":"close","params":null}'
+```
+
+### Available Daemon Commands
+
+| Method | Params | Description |
+|--------|--------|-------------|
+| `handshake` | `null` | Get daemon info (pid, version) |
+| `screen` | `{"format":"text"\|"json"}` | Get current screen content |
+| `screenshot` | `{}` | Get PNG screenshot as base64 |
+| `press` | `{"key":"Enter"}` | Press a key (Enter, Escape, Tab, Up, Down, etc.) |
+| `type` | `{"text":"..."}` | Type text |
+| `hotkey` | `{"ctrl":true,"ch":"c"}` | Send Ctrl/Alt combinations |
+| `wait_for_text` | `{"text":"...","timeout_ms":5000}` | Wait for text to appear |
+| `wait_for_idle` | `{"idle_ms":500,"timeout_ms":5000}` | Wait for screen to stabilize |
+| `status` | `null` | Check if process is still running |
+| `close` | `null` | Terminate the daemon and child process |
+
+### Reusable Test Library
+
+For multiple tests, create a shared library (e.g., `lib.sh`):
+
+```bash
+#!/bin/bash
+# lib.sh - Shared test helpers
+
+REQUEST_ID=1
+
+next_id() {
+    local id=$REQUEST_ID
+    REQUEST_ID=$((REQUEST_ID + 1))
+    echo $id
+}
+
+# Send command with auto-incrementing ID
+tw_auto() {
+    local sock="$1"
+    local method="$2"
+    local params="${3:-null}"
+    local id=$(next_id)
+    echo "{\"id\":$id,\"method\":\"$method\",\"params\":$params}" | \
+        socat - UNIX-CONNECT:"$sock"
+}
+
+# Convenience wrappers
+get_screen() { tw_auto "$1" "screen" '{"format":"text"}' | jq -r '.result'; }
+press()      { tw_auto "$1" "press" "{\"key\":\"$2\"}" > /dev/null; }
+type_text()  { tw_auto "$1" "type" "{\"text\":\"$2\"}" > /dev/null; }
+ctrl()       { tw_auto "$1" "hotkey" "{\"ctrl\":true,\"ch\":\"$2\"}" > /dev/null; }
+wait_idle()  { tw_auto "$1" "wait_for_idle" "{\"idle_ms\":${2:-500},\"timeout_ms\":${3:-5000}}"; }
+
+# Assert screen contains text
+assert_contains() {
+    local sock="$1" expected="$2" desc="${3:-contains '$2'}"
+    if get_screen "$sock" | grep -q "$expected"; then
+        echo "PASS: $desc"
+        return 0
+    else
+        echo "FAIL: $desc"
+        return 1
+    fi
+}
+```
+
+### Example Test Script
+
+```bash
+#!/bin/bash
+# test_my_app.sh
+source "$(dirname "$0")/lib.sh"
+
+SOCK="/tmp/test-$$.sock"
+termwright daemon --socket "$SOCK" -- ./my-app &
+while [ ! -S "$SOCK" ]; do sleep 0.1; done
+
+# Wait for app to initialize
+wait_idle "$SOCK" > /dev/null
+
+# Run tests
+assert_contains "$SOCK" "Main Menu" "App shows main menu"
+
+press "$SOCK" "Enter"
+wait_idle "$SOCK" > /dev/null
+assert_contains "$SOCK" "Settings" "Enter opens settings"
+
+ctrl "$SOCK" "q"
+echo "All tests passed!"
+```
+
+### Key Names Reference
+
+Common key names for the `press` command:
+
+- Navigation: `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PageUp`, `PageDown`
+- Actions: `Enter`, `Escape`, `Tab`, `Backspace`, `Delete`, `Insert`
+- Function keys: `F1` through `F12`
+- Characters: Any single character like `a`, `1`, `?`
+
 ## CLI Reference
 
 ### `termwright fonts`
