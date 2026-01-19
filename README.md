@@ -311,6 +311,35 @@ Options:
   --timeout <SECS>       Timeout for wait conditions [default: 30]
 ```
 
+### `termwright run-steps`
+
+Run a YAML or JSON steps file for end-to-end testing.
+
+```
+termwright run-steps [OPTIONS] <FILE>
+
+Options:
+  --connect <PATH>       Connect to an existing daemon socket instead of spawning
+  --trace                Write a trace.json file in the artifacts directory
+```
+
+### `termwright exec`
+
+Execute a single daemon request and print the response.
+
+```
+termwright exec --socket <PATH> --method <NAME> [--params <JSON>]
+```
+
+### `termwright hub`
+
+Start or stop multiple daemon sessions for parallel agents.
+
+```
+termwright hub start --count <N> [--cols <COLS>] [--rows <ROWS>] [--output <FILE>] -- <COMMAND> [ARGS]...
+termwright hub stop --socket <PATH>... [--input <FILE>]
+```
+
 ### `termwright daemon`
 
 Run a single TUI session and expose it over a Unix socket.
