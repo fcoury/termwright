@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 use crate::daemon::protocol::*;
 use crate::error::{Result, TermwrightError};
 use crate::input::MouseButton;
+use crate::screen::Screen;
 
 pub struct DaemonClient {
     next_id: AtomicU64,
@@ -54,6 +55,19 @@ impl DaemonClient {
         .await
     }
 
+    pub async fn screen_json(&self) -> Result<String> {
+        let screen: Screen = self
+            .call(
+                "screen",
+                ScreenParams {
+                    format: ScreenFormat::Json,
+                },
+            )
+            .await?;
+
+        screen.to_json().map_err(TermwrightError::Json)
+    }
+
     pub async fn screenshot_png(&self) -> Result<Vec<u8>> {
         let res: ScreenshotResult = self
             .call(
@@ -89,6 +103,19 @@ impl DaemonClient {
             HotkeyParams {
                 ctrl: Some(true),
                 alt: Some(false),
+                ch,
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn hotkey(&self, ctrl: bool, alt: bool, ch: char) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "hotkey",
+            HotkeyParams {
+                ctrl: Some(ctrl),
+                alt: Some(alt),
                 ch,
             },
         )
@@ -138,11 +165,47 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn wait_for_pattern(
+        &self,
+        pattern: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "wait_for_pattern",
+            WaitForPatternParams {
+                pattern: pattern.into(),
+                timeout_ms: timeout.map(|d| d.as_millis() as u64),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn wait_for_idle(&self, idle: Duration, timeout: Option<Duration>) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "wait_for_idle",
+            WaitForIdleParams {
+                idle_ms: idle.as_millis() as u64,
+                timeout_ms: timeout.map(|d| d.as_millis() as u64),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn close(&self) -> Result<()> {
         let _ = self
             .call::<_, serde_json::Value>("close", serde_json::Value::Null)
             .await;
         Ok(())
+    }
+
+    pub async fn call_raw(
+        &self,
+        method: impl Into<String>,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        self.call(&method.into(), params).await
     }
 
     async fn call<P: Serialize, R: DeserializeOwned>(&self, method: &str, params: P) -> Result<R> {

@@ -58,11 +58,8 @@ async fn accept_clients(listener: UnixListener, terminal: &Terminal) -> Result<(
         }
 
         // Accept with a timeout so we can periodically check process status
-        let accept_result = tokio::time::timeout(
-            Duration::from_millis(500),
-            listener.accept(),
-        )
-        .await;
+        let accept_result =
+            tokio::time::timeout(Duration::from_millis(500), listener.accept()).await;
 
         let stream = match accept_result {
             Ok(Ok((stream, _))) => stream,

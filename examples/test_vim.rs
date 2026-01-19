@@ -29,9 +29,7 @@ async fn main() -> Result<()> {
     // Wait for vim to show the filename or be ready
     // Vim shows the filename at the bottom, or shows empty buffer indicators
     // We ignore errors here since vim startup varies
-    let _ = term.expect("VIM")
-        .timeout(Duration::from_secs(5))
-        .await;
+    let _ = term.expect("VIM").timeout(Duration::from_secs(5)).await;
 
     // Give vim a moment to fully initialize
     tokio::time::sleep(Duration::from_millis(500)).await;

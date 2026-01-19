@@ -6,8 +6,17 @@ use std::time::Duration;
 
 use clap::{Parser, Subcommand};
 use font_kit::source::SystemSource;
+use serde::{Deserialize, Serialize};
+use termwright::daemon::protocol::Request;
 use termwright::daemon::server::{DaemonConfig, run_daemon};
 use termwright::prelude::*;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::UnixStream;
+
+mod runner;
+mod steps;
+
+use runner::RunStepsOptions;
 
 #[derive(Parser)]
 #[command(name = "termwright")]
@@ -104,6 +113,36 @@ enum Commands {
         args: Vec<String>,
     },
 
+    /// Run a steps file for end-to-end testing
+    RunSteps {
+        /// Path to YAML or JSON steps file
+        #[arg(required = true)]
+        file: PathBuf,
+
+        /// Connect to an existing daemon socket instead of spawning
+        #[arg(long)]
+        connect: Option<PathBuf>,
+
+        /// Record trace output to artifacts directory
+        #[arg(long)]
+        trace: bool,
+    },
+
+    /// Execute a single daemon request and print the response
+    Exec {
+        /// Unix socket path
+        #[arg(long)]
+        socket: PathBuf,
+
+        /// Method name
+        #[arg(long)]
+        method: String,
+
+        /// Params JSON (defaults to null)
+        #[arg(long)]
+        params: Option<String>,
+    },
+
     /// Run a long-lived daemon controlling a single TUI session
     Daemon {
         /// Terminal width
@@ -133,6 +172,53 @@ enum Commands {
         /// Arguments to pass to the command
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
+    },
+
+    /// Manage a pool of daemon sessions
+    Hub {
+        #[command(subcommand)]
+        command: HubCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum HubCommands {
+    /// Start multiple daemon sessions
+    Start {
+        /// Number of sessions to start
+        #[arg(long, default_value = "1")]
+        count: u16,
+
+        /// Terminal width
+        #[arg(long, default_value = "80")]
+        cols: u16,
+
+        /// Terminal height
+        #[arg(long, default_value = "24")]
+        rows: u16,
+
+        /// Write hub session info to this JSON file
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// The command to run
+        #[arg(required = true)]
+        command: String,
+
+        /// Arguments to pass to the command
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Stop daemon sessions by socket list or hub file
+    Stop {
+        /// Unix socket paths to close
+        #[arg(long)]
+        socket: Vec<PathBuf>,
+
+        /// Load sockets from a JSON hub file
+        #[arg(long)]
+        input: Option<PathBuf>,
     },
 }
 
@@ -200,6 +286,20 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+        Commands::RunSteps {
+            file,
+            connect,
+            trace,
+        } => {
+            runner::run_steps(&file, RunStepsOptions { connect, trace }).await?;
+        }
+        Commands::Exec {
+            socket,
+            method,
+            params,
+        } => {
+            exec_daemon_request(&socket, &method, params.as_deref()).await?;
+        }
         Commands::Daemon {
             cols,
             rows,
@@ -220,6 +320,21 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+        Commands::Hub { command } => match command {
+            HubCommands::Start {
+                count,
+                cols,
+                rows,
+                output,
+                command,
+                args,
+            } => {
+                hub_start(count, cols, rows, output.as_ref(), &command, &args).await?;
+            }
+            HubCommands::Stop { socket, input } => {
+                hub_stop(&socket, input.as_ref()).await?;
+            }
+        },
     }
 
     Ok(())
@@ -269,6 +384,198 @@ async fn run_command(
 
     // Kill the process
     let _ = term.kill().await;
+
+    Ok(())
+}
+
+async fn exec_daemon_request(socket: &PathBuf, method: &str, params: Option<&str>) -> Result<()> {
+    let params_value = match params {
+        Some(raw) => serde_json::from_str(raw).map_err(TermwrightError::Json)?,
+        None => serde_json::Value::Null,
+    };
+
+    let request = Request {
+        id: 1,
+        method: method.to_string(),
+        params: params_value,
+    };
+
+    let stream = UnixStream::connect(socket)
+        .await
+        .map_err(|e| TermwrightError::Ipc(format!("connect failed: {e}")))?;
+
+    let (read_half, mut write_half) = stream.into_split();
+    let mut reader = BufReader::new(read_half);
+
+    let mut bytes = serde_json::to_vec(&request).map_err(TermwrightError::Json)?;
+    bytes.push(b'\n');
+    write_half
+        .write_all(&bytes)
+        .await
+        .map_err(|e| TermwrightError::Ipc(format!("write failed: {e}")))?;
+    write_half
+        .flush()
+        .await
+        .map_err(|e| TermwrightError::Ipc(format!("flush failed: {e}")))?;
+
+    let mut line = String::new();
+    let n = reader
+        .read_line(&mut line)
+        .await
+        .map_err(|e| TermwrightError::Ipc(format!("read failed: {e}")))?;
+    if n == 0 {
+        return Err(TermwrightError::Ipc("empty response".to_string()));
+    }
+
+    println!("{}", line.trim_end());
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct HubEntry {
+    socket: PathBuf,
+    pid: u32,
+}
+
+async fn hub_start(
+    count: u16,
+    cols: u16,
+    rows: u16,
+    output: Option<&PathBuf>,
+    command: &str,
+    args: &[String],
+) -> Result<()> {
+    let mut entries = Vec::new();
+
+    for index in 0..count {
+        let socket = std::env::temp_dir().join(format!(
+            "termwright-hub-{}-{}.sock",
+            std::process::id(),
+            index + 1
+        ));
+        let pid = spawn_background_daemon(cols, rows, &socket, command, args).await?;
+        entries.push(HubEntry { socket, pid });
+    }
+
+    let json = serde_json::to_string_pretty(&entries).map_err(TermwrightError::Json)?;
+    println!("{json}");
+
+    if let Some(path) = output {
+        std::fs::write(path, json).map_err(TermwrightError::Pty)?;
+    }
+
+    Ok(())
+}
+
+async fn hub_stop(sockets: &[PathBuf], input: Option<&PathBuf>) -> Result<()> {
+    let mut entries = Vec::new();
+
+    if let Some(path) = input {
+        let contents = std::fs::read_to_string(path).map_err(TermwrightError::Pty)?;
+        let parsed: Vec<HubEntry> =
+            serde_json::from_str(&contents).map_err(TermwrightError::Json)?;
+        entries.extend(parsed.into_iter().map(|entry| entry.socket));
+    }
+
+    entries.extend_from_slice(sockets);
+
+    if entries.is_empty() {
+        return Err(TermwrightError::Protocol(
+            "hub stop requires --socket or --input".to_string(),
+        ));
+    }
+
+    for socket in entries {
+        let _ = send_close_request(&socket).await;
+    }
+
+    Ok(())
+}
+
+async fn spawn_background_daemon(
+    cols: u16,
+    rows: u16,
+    socket: &PathBuf,
+    command: &str,
+    args: &[String],
+) -> Result<u32> {
+    let exe = std::env::current_exe()
+        .map_err(|e| TermwrightError::SpawnFailed(format!("current_exe failed: {e}")))?;
+
+    let mut child = ProcessCommand::new(exe);
+    child
+        .arg("daemon")
+        .arg("--cols")
+        .arg(cols.to_string())
+        .arg("--rows")
+        .arg(rows.to_string())
+        .arg("--socket")
+        .arg(socket)
+        .arg("--background-child")
+        .arg("--")
+        .arg(command);
+
+    for arg in args {
+        child.arg(arg);
+    }
+
+    child
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let child = child
+        .spawn()
+        .map_err(|e| TermwrightError::SpawnFailed(format!("failed to spawn daemon: {e}")))?;
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        if tokio::time::Instant::now() > deadline {
+            return Err(TermwrightError::Timeout {
+                condition: "daemon socket to become ready".to_string(),
+                timeout: Duration::from_secs(2),
+            });
+        }
+
+        match UnixStream::connect(socket).await {
+            Ok(stream) => {
+                drop(stream);
+                break;
+            }
+            Err(_) => tokio::time::sleep(Duration::from_millis(20)).await,
+        }
+    }
+
+    Ok(child.id())
+}
+
+async fn send_close_request(socket: &PathBuf) -> Result<()> {
+    let request = Request {
+        id: 1,
+        method: "close".to_string(),
+        params: serde_json::Value::Null,
+    };
+
+    let stream = UnixStream::connect(socket)
+        .await
+        .map_err(|e| TermwrightError::Ipc(format!("connect failed: {e}")))?;
+
+    let (read_half, mut write_half) = stream.into_split();
+    let mut reader = BufReader::new(read_half);
+
+    let mut bytes = serde_json::to_vec(&request).map_err(TermwrightError::Json)?;
+    bytes.push(b'\n');
+    write_half
+        .write_all(&bytes)
+        .await
+        .map_err(|e| TermwrightError::Ipc(format!("write failed: {e}")))?;
+    write_half
+        .flush()
+        .await
+        .map_err(|e| TermwrightError::Ipc(format!("flush failed: {e}")))?;
+
+    let mut line = String::new();
+    let _ = reader.read_line(&mut line).await;
 
     Ok(())
 }

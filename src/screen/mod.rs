@@ -250,8 +250,17 @@ impl Screen {
     /// Extract a region of the screen by coordinates.
     ///
     /// Returns a Region that can be used to extract text or cells.
-    pub fn region(&self, row_range: std::ops::Range<u16>, col_range: std::ops::Range<u16>) -> Region {
-        Region::from_ranges(row_range.start, row_range.end, col_range.start, col_range.end)
+    pub fn region(
+        &self,
+        row_range: std::ops::Range<u16>,
+        col_range: std::ops::Range<u16>,
+    ) -> Region {
+        Region::from_ranges(
+            row_range.start,
+            row_range.end,
+            col_range.start,
+            col_range.end,
+        )
     }
 
     /// Get all cells in a region.
@@ -497,12 +506,7 @@ impl Region {
     }
 
     /// Create a region from coordinate ranges.
-    pub fn from_ranges(
-        row_start: u16,
-        row_end: u16,
-        col_start: u16,
-        col_end: u16,
-    ) -> Self {
+    pub fn from_ranges(row_start: u16, row_end: u16, col_start: u16, col_end: u16) -> Self {
         Self {
             start: Position::new(row_start, col_start),
             end: Position::new(row_end, col_end),
