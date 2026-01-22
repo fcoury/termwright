@@ -35,9 +35,11 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y musl-tools pkg-config libfontconfig1-dev
 
       - name: Build
+        env:
+          RUST_FONTCONFIG_DLOPEN: "on"
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package (Unix)
