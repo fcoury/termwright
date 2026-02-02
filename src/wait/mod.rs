@@ -22,6 +22,8 @@ pub enum WaitCondition {
     TextDisappears(String),
     /// Wait for a regex pattern to match.
     PatternMatches(String),
+    /// Wait for a regex pattern to stop matching.
+    PatternNotMatches(String),
     /// Wait for the cursor to reach a specific position.
     CursorAt(Position),
     /// Wait for the screen to stabilize (no changes for duration).
@@ -41,6 +43,14 @@ impl WaitCondition {
                     re.is_match(&screen.text())
                 } else {
                     false
+                }
+            }
+            WaitCondition::PatternNotMatches(pattern) => {
+                // Returns true if pattern does NOT match (or regex is invalid)
+                if let Ok(re) = Regex::new(pattern) {
+                    !re.is_match(&screen.text())
+                } else {
+                    true // Invalid regex never matches, so "not matches" is true
                 }
             }
             WaitCondition::CursorAt(pos) => screen.cursor() == *pos,
@@ -66,6 +76,9 @@ impl WaitCondition {
             WaitCondition::TextDisappears(text) => format!("text '{}' to disappear", text),
             WaitCondition::PatternMatches(pattern) => {
                 format!("pattern '{}' to match", pattern)
+            }
+            WaitCondition::PatternNotMatches(pattern) => {
+                format!("pattern '{}' to stop matching", pattern)
             }
             WaitCondition::CursorAt(pos) => {
                 format!("cursor at row={}, col={}", pos.row, pos.col)

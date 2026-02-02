@@ -9,8 +9,9 @@ use serde::Serialize;
 use tokio::time::sleep;
 
 use crate::steps::{
-    ArtifactMode, ArtifactsConfig, ExpectPatternStep, ExpectTextStep, ScreenshotStep,
-    SessionConfig, Step, StepsFile,
+    ArtifactMode, ArtifactsConfig, ExpectPatternStep, ExpectTextStep, NotExpectPatternStep,
+    NotExpectTextStep, ScreenshotStep, SessionConfig, Step, StepsFile, WaitForPatternGoneStep,
+    WaitForTextGoneStep,
 };
 use termwright::daemon::client::DaemonClient;
 use termwright::daemon::server::{DaemonConfig, run_daemon};
@@ -144,6 +145,12 @@ async fn execute_step(client: &DaemonClient, step: &Step) -> Result<()> {
                 )
                 .await
         }
+        Step::WaitForTextGone { wait_for_text_gone } => {
+            wait_for_text_gone_step(client, wait_for_text_gone).await
+        }
+        Step::WaitForPatternGone {
+            wait_for_pattern_gone,
+        } => wait_for_pattern_gone_step(client, wait_for_pattern_gone).await,
         Step::Press { press } => client.press(&press.key).await,
         Step::Type { r#type } => client.r#type(&r#type.text).await,
         Step::Hotkey { hotkey } => {
@@ -157,6 +164,12 @@ async fn execute_step(client: &DaemonClient, step: &Step) -> Result<()> {
         }
         Step::ExpectText { expect_text } => expect_text_step(client, expect_text).await,
         Step::ExpectPattern { expect_pattern } => expect_pattern_step(client, expect_pattern).await,
+        Step::NotExpectText { not_expect_text } => {
+            not_expect_text_step(client, not_expect_text).await
+        }
+        Step::NotExpectPattern { not_expect_pattern } => {
+            not_expect_pattern_step(client, not_expect_pattern).await
+        }
         Step::Screenshot { .. } => Ok(()),
     }
 }
@@ -171,6 +184,35 @@ async fn expect_pattern_step(client: &DaemonClient, step: &ExpectPatternStep) ->
     client
         .wait_for_pattern(&step.pattern, timeout(step.timeout_ms))
         .await
+}
+
+async fn wait_for_text_gone_step(
+    client: &DaemonClient,
+    step: &WaitForTextGoneStep,
+) -> Result<()> {
+    client
+        .wait_for_text_gone(&step.text, timeout(step.timeout_ms))
+        .await
+}
+
+async fn wait_for_pattern_gone_step(
+    client: &DaemonClient,
+    step: &WaitForPatternGoneStep,
+) -> Result<()> {
+    client
+        .wait_for_pattern_gone(&step.pattern, timeout(step.timeout_ms))
+        .await
+}
+
+async fn not_expect_text_step(client: &DaemonClient, step: &NotExpectTextStep) -> Result<()> {
+    client.not_expect_text(&step.text).await
+}
+
+async fn not_expect_pattern_step(
+    client: &DaemonClient,
+    step: &NotExpectPatternStep,
+) -> Result<()> {
+    client.not_expect_pattern(&step.pattern).await
 }
 
 fn timeout(timeout_ms: Option<u64>) -> Option<Duration> {
@@ -322,11 +364,15 @@ fn step_label(step: &Step) -> String {
         Step::WaitForText { .. } => "waitForText".to_string(),
         Step::WaitForPattern { .. } => "waitForPattern".to_string(),
         Step::WaitForIdle { .. } => "waitForIdle".to_string(),
+        Step::WaitForTextGone { .. } => "waitForTextGone".to_string(),
+        Step::WaitForPatternGone { .. } => "waitForPatternGone".to_string(),
         Step::Press { .. } => "press".to_string(),
         Step::Type { .. } => "type".to_string(),
         Step::Hotkey { .. } => "hotkey".to_string(),
         Step::ExpectText { .. } => "expectText".to_string(),
         Step::ExpectPattern { .. } => "expectPattern".to_string(),
+        Step::NotExpectText { .. } => "notExpectText".to_string(),
+        Step::NotExpectPattern { .. } => "notExpectPattern".to_string(),
         Step::Screenshot { .. } => "screenshot".to_string(),
     }
 }

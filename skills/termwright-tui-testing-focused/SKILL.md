@@ -14,17 +14,24 @@ allowed-tools:
 
 Quick, agent-friendly workflow for testing terminal UIs with minimal ceremony.
 
-## When to Use
+## First Step: Discover Features
 
-- You need to test or debug terminal UIs (ratatui, crossterm, ncurses, etc.)
-- You want repeatable E2E flows with artifacts for failures
-- You need parallel sessions across multiple daemons
+```bash
+termwright info steps              # List step types
+termwright info steps waitForText  # Specific step syntax
+termwright info keys               # Valid key names
+termwright info protocols          # Daemon methods
+```
 
-## Decision Guide
+## Discovery Quick Reference
 
-- **Use `run-steps`** for most E2E tests (preferred).
-- **Use `exec`** for one-off commands or manual inspection.
-- **Use `hub`** when multiple daemons are needed in parallel.
+| Need | Command |
+|------|---------|
+| Step syntax | `termwright info steps <step>` |
+| Key names | `termwright info keys` |
+| Protocol method | `termwright info protocols <method>` |
+| Capabilities | `termwright info capabilities` |
+| JSON output | Add `--json` to any info command |
 
 ## Core Workflow (Preferred)
 
@@ -45,6 +52,7 @@ steps:
   - type: {text: "Hello"}
   - press: {key: Escape}
   - expectText: {text: "Hello"}
+  - notExpectText: {text: "ERROR"}
   - screenshot: {name: "vim-content"}
 artifacts:
   mode: onFailure
@@ -55,6 +63,17 @@ artifacts:
 
 ```bash
 termwright run-steps --trace test.yaml
+```
+
+## Negative Assertions
+
+Check that content is NOT present:
+
+```yaml
+steps:
+  - notExpectText: {text: "ERROR"}           # Immediate check
+  - notExpectPattern: {pattern: "fail|crash"} # Regex check
+  - waitForTextGone: {text: "Loading...", timeoutMs: 5000}  # Wait to disappear
 ```
 
 ## Artifact/Trace Behavior
@@ -79,19 +98,9 @@ termwright hub start --count 3 --output sessions.json -- ./my-app
 termwright hub stop --input sessions.json
 ```
 
-## Step Types (Quick Reference)
-
-- `waitForText`, `waitForPattern`, `waitForIdle`
-- `press`, `type`, `hotkey`
-- `expectText`, `expectPattern`
-- `screenshot`
-
 ## Debugging Tips
 
 - Use `waitForIdle` before assertions to reduce flakiness
 - Check `screen.json` for color/cursor mismatches
 - Use `--trace` when diagnosing timing issues
-
-## Protocol Note
-
-Daemon methods use JSON-over-unix-socket. Prefer `termwright exec` unless you need a custom client.
+- Run `termwright info steps` to discover available step types

@@ -154,6 +154,28 @@ pub struct WaitForExitParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct WaitForTextGoneParams {
+    pub text: String,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WaitForPatternGoneParams {
+    pub pattern: String,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NotExpectTextParams {
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NotExpectPatternParams {
+    pub pattern: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WaitForExitResult {
     pub exit_code: i32,
 }

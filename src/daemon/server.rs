@@ -283,6 +283,56 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 waiter.await?;
                 Ok(Response::ok_empty(id))
             }
+            "wait_for_text_gone" => {
+                let params: WaitForTextGoneParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let mut waiter = terminal.expect_gone(&params.text);
+                if let Some(timeout_ms) = params.timeout_ms {
+                    waiter = waiter.timeout(Duration::from_millis(timeout_ms));
+                }
+                waiter.await?;
+                Ok(Response::ok_empty(id))
+            }
+            "wait_for_pattern_gone" => {
+                let params: WaitForPatternGoneParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let mut waiter = terminal.expect_pattern_gone(&params.pattern);
+                if let Some(timeout_ms) = params.timeout_ms {
+                    waiter = waiter.timeout(Duration::from_millis(timeout_ms));
+                }
+                waiter.await?;
+                Ok(Response::ok_empty(id))
+            }
+            "not_expect_text" => {
+                let params: NotExpectTextParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let screen = terminal.screen().await;
+                if screen.contains(&params.text) {
+                    return Err(TermwrightError::Protocol(format!(
+                        "text '{}' was found on screen (expected not present)",
+                        params.text
+                    )));
+                }
+                Ok(Response::ok_empty(id))
+            }
+            "not_expect_pattern" => {
+                let params: NotExpectPatternParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let screen = terminal.screen().await;
+                let re = regex::Regex::new(&params.pattern)
+                    .map_err(|e| TermwrightError::Protocol(format!("invalid regex: {}", e)))?;
+                if re.is_match(&screen.text()) {
+                    return Err(TermwrightError::Protocol(format!(
+                        "pattern '{}' matched on screen (expected no match)",
+                        params.pattern
+                    )));
+                }
+                Ok(Response::ok_empty(id))
+            }
             "wait_for_exit" => {
                 let params: WaitForExitParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;

@@ -193,6 +193,58 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn wait_for_text_gone(
+        &self,
+        text: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "wait_for_text_gone",
+            WaitForTextGoneParams {
+                text: text.into(),
+                timeout_ms: timeout.map(|d| d.as_millis() as u64),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn wait_for_pattern_gone(
+        &self,
+        pattern: impl Into<String>,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "wait_for_pattern_gone",
+            WaitForPatternGoneParams {
+                pattern: pattern.into(),
+                timeout_ms: timeout.map(|d| d.as_millis() as u64),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn not_expect_text(&self, text: impl Into<String>) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "not_expect_text",
+            NotExpectTextParams { text: text.into() },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn not_expect_pattern(&self, pattern: impl Into<String>) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "not_expect_pattern",
+            NotExpectPatternParams {
+                pattern: pattern.into(),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn close(&self) -> Result<()> {
         let _ = self
             .call::<_, serde_json::Value>("close", serde_json::Value::Null)

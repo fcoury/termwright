@@ -351,6 +351,14 @@ impl Terminal {
         }
     }
 
+    /// Wait for a regex pattern to stop matching on screen.
+    pub fn expect_pattern_gone(&self, pattern: &str) -> ExpectBuilder<'_> {
+        ExpectBuilder {
+            terminal: self,
+            wait: WaitBuilder::new(WaitCondition::PatternNotMatches(pattern.to_string())),
+        }
+    }
+
     /// Wait for the cursor to reach a specific position.
     pub fn wait_cursor(&self, position: crate::screen::Position) -> ExpectBuilder<'_> {
         ExpectBuilder {

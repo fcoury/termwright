@@ -14,6 +14,16 @@ allowed-tools:
 
 Automate end-to-end testing of terminal user interfaces with Termwright's daemon-based architecture.
 
+## Progressive Discovery
+
+For detailed syntax, use `termwright info`:
+- `termwright info steps` - All step types
+- `termwright info steps waitForText` - Specific step syntax
+- `termwright info keys` - Valid key names
+- `termwright info protocols` - Daemon methods
+- `termwright info capabilities` - Runtime info
+- Add `--json` for machine-readable output
+
 ## Quick Start
 
 ### Run a Step File Test
@@ -81,14 +91,21 @@ artifacts:
 | `waitForText` | Wait for text to appear | `{text: "Ready", timeoutMs: 5000}` |
 | `waitForPattern` | Wait for regex match | `{pattern: "error\|warning"}` |
 | `waitForIdle` | Wait for screen stability | `{idleMs: 500, timeoutMs: 5000}` |
+| `waitForTextGone` | Wait for text to disappear | `{text: "Loading...", timeoutMs: 5000}` |
+| `waitForPatternGone` | Wait for pattern to stop matching | `{pattern: "\\d+%", timeoutMs: 10000}` |
 | `press` | Press a key | `{key: "Enter"}` |
 | `type` | Type text | `{text: "hello"}` |
 | `hotkey` | Modifier combo | `{ctrl: true, ch: "c"}` |
 | `expectText` | Assert text exists | `{text: "Success"}` |
 | `expectPattern` | Assert pattern matches | `{pattern: "completed"}` |
+| `notExpectText` | Assert text NOT present | `{text: "ERROR"}` |
+| `notExpectPattern` | Assert pattern does NOT match | `{pattern: "fail\|crash"}` |
 | `screenshot` | Capture PNG | `{name: "result"}` |
 
 Note: `screenshot` steps require artifacts mode `onFailure` or `always` (not `off`).
+Note: `notExpectText` and `notExpectPattern` are immediate checks (no timeout).
+
+Run `termwright info steps` to see all available steps with detailed syntax.
 
 For full schema details, see [step-schema.md](references/step-schema.md).
 

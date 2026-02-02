@@ -9,6 +9,10 @@ use font_kit::source::SystemSource;
 use serde::{Deserialize, Serialize};
 use termwright::daemon::protocol::Request;
 use termwright::daemon::server::{DaemonConfig, run_daemon};
+use termwright::info::{
+    InfoOverview, capabilities::CapabilitiesInfo, keys::KeysOverview, protocols::ProtocolsOverview,
+    steps::StepsOverview,
+};
 use termwright::prelude::*;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -179,6 +183,16 @@ enum Commands {
         #[command(subcommand)]
         command: HubCommands,
     },
+
+    /// Show information about steps, protocols, and capabilities
+    Info {
+        #[command(subcommand)]
+        command: Option<InfoCommands>,
+
+        /// Output as JSON
+        #[arg(long, global = true)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -220,6 +234,27 @@ enum HubCommands {
         #[arg(long)]
         input: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum InfoCommands {
+    /// List all step types for YAML/JSON step files
+    Steps {
+        /// Specific step name to show details
+        name: Option<String>,
+    },
+
+    /// Daemon protocol methods
+    Protocols {
+        /// Specific method name to show details
+        name: Option<String>,
+    },
+
+    /// Valid key names for press/hotkey steps
+    Keys,
+
+    /// Runtime capabilities and version info
+    Capabilities,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -335,6 +370,9 @@ async fn main() -> Result<()> {
                 hub_stop(&socket, input.as_ref()).await?;
             }
         },
+        Commands::Info { command, json } => {
+            run_info_command(command, json)?;
+        }
     }
 
     Ok(())
@@ -718,6 +756,111 @@ async fn run_daemon_command(
     }
 
     run_daemon(DaemonConfig::new(socket), terminal).await
+}
+
+fn run_info_command(command: Option<InfoCommands>, json: bool) -> Result<()> {
+    match command {
+        None => {
+            let overview = InfoOverview::new();
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&overview).map_err(TermwrightError::Json)?
+                );
+            } else {
+                print!("{}", overview.to_text());
+            }
+        }
+        Some(InfoCommands::Steps { name }) => {
+            let steps = StepsOverview::new();
+            match name {
+                None => {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&steps).map_err(TermwrightError::Json)?
+                        );
+                    } else {
+                        print!("{}", steps.to_text());
+                    }
+                }
+                Some(step_name) => {
+                    if let Some(step) = steps.get(&step_name) {
+                        if json {
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(step).map_err(TermwrightError::Json)?
+                            );
+                        } else {
+                            print!("{}", step.to_text());
+                        }
+                    } else {
+                        return Err(TermwrightError::Protocol(format!(
+                            "unknown step: {}. Use `termwright info steps` to list all steps.",
+                            step_name
+                        )));
+                    }
+                }
+            }
+        }
+        Some(InfoCommands::Protocols { name }) => {
+            let protocols = ProtocolsOverview::new();
+            match name {
+                None => {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&protocols)
+                                .map_err(TermwrightError::Json)?
+                        );
+                    } else {
+                        print!("{}", protocols.to_text());
+                    }
+                }
+                Some(method_name) => {
+                    if let Some(method) = protocols.get(&method_name) {
+                        if json {
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(method)
+                                    .map_err(TermwrightError::Json)?
+                            );
+                        } else {
+                            print!("{}", method.to_text());
+                        }
+                    } else {
+                        return Err(TermwrightError::Protocol(format!(
+                            "unknown method: {}. Use `termwright info protocols` to list all methods.",
+                            method_name
+                        )));
+                    }
+                }
+            }
+        }
+        Some(InfoCommands::Keys) => {
+            let keys = KeysOverview::new();
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&keys).map_err(TermwrightError::Json)?
+                );
+            } else {
+                print!("{}", keys.to_text());
+            }
+        }
+        Some(InfoCommands::Capabilities) => {
+            let caps = CapabilitiesInfo::new();
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&caps).map_err(TermwrightError::Json)?
+                );
+            } else {
+                print!("{}", caps.to_text());
+            }
+        }
+    }
+    Ok(())
 }
 
 fn list_fonts() {

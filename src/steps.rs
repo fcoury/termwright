@@ -143,6 +143,14 @@ pub enum Step {
         #[serde(rename = "waitForIdle")]
         wait_for_idle: WaitForIdleStep,
     },
+    WaitForTextGone {
+        #[serde(rename = "waitForTextGone")]
+        wait_for_text_gone: WaitForTextGoneStep,
+    },
+    WaitForPatternGone {
+        #[serde(rename = "waitForPatternGone")]
+        wait_for_pattern_gone: WaitForPatternGoneStep,
+    },
     Press {
         press: PressStep,
     },
@@ -160,6 +168,14 @@ pub enum Step {
     ExpectPattern {
         #[serde(rename = "expectPattern")]
         expect_pattern: ExpectPatternStep,
+    },
+    NotExpectText {
+        #[serde(rename = "notExpectText")]
+        not_expect_text: NotExpectTextStep,
+    },
+    NotExpectPattern {
+        #[serde(rename = "notExpectPattern")]
+        not_expect_pattern: NotExpectPatternStep,
     },
     Screenshot {
         screenshot: ScreenshotStep,
@@ -226,6 +242,34 @@ pub struct ExpectPatternStep {
     pub pattern: String,
     #[serde(default)]
     pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitForTextGoneStep {
+    pub text: String,
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitForPatternGoneStep {
+    pub pattern: String,
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotExpectTextStep {
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotExpectPatternStep {
+    pub pattern: String,
 }
 
 #[derive(Debug, Deserialize)]

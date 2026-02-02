@@ -61,6 +61,7 @@
 
 pub mod daemon;
 pub mod error;
+pub mod info;
 pub mod input;
 pub mod output;
 pub mod screen;
