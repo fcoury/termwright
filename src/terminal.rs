@@ -15,6 +15,14 @@ use crate::input::{Key, MouseButton};
 use crate::screen::Screen;
 use crate::wait::{DEFAULT_TIMEOUT, WaitBuilder, WaitCondition};
 
+mod csi;
+mod osc;
+
+use self::{
+    csi::CsiEmulator,
+    osc::{OscEmulator, initial_color_state},
+};
+
 /// Default terminal width.
 pub const DEFAULT_COLS: u16 = 80;
 /// Default terminal height.
@@ -57,9 +65,11 @@ impl Default for TerminalConfig {
 }
 
 /// Builder for creating a Terminal instance.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TerminalBuilder {
     config: TerminalConfig,
+    inject_default_env: bool,
+    osc_emulation: bool,
 }
 
 impl TerminalBuilder {
@@ -81,6 +91,18 @@ impl TerminalBuilder {
         self
     }
 
+    /// Disable default TERM/COLORTERM injection.
+    pub fn no_default_env(mut self) -> Self {
+        self.inject_default_env = false;
+        self
+    }
+
+    /// Disable OSC color query emulation.
+    pub fn no_osc_emulation(mut self) -> Self {
+        self.osc_emulation = false;
+        self
+    }
+
     /// Set the working directory.
     pub fn working_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.config.working_dir = Some(path.into());
@@ -95,7 +117,24 @@ impl TerminalBuilder {
 
     /// Spawn a command in the terminal.
     pub async fn spawn(self, cmd: &str, args: &[&str]) -> Result<Terminal> {
-        Terminal::spawn_with_config(cmd, args, self.config).await
+        Terminal::spawn_with_config(
+            cmd,
+            args,
+            self.config,
+            self.inject_default_env,
+            self.osc_emulation,
+        )
+        .await
+    }
+}
+
+impl Default for TerminalBuilder {
+    fn default() -> Self {
+        Self {
+            config: TerminalConfig::default(),
+            inject_default_env: true,
+            osc_emulation: true,
+        }
     }
 }
 
@@ -124,7 +163,13 @@ impl Terminal {
     }
 
     /// Spawn a command with the given configuration.
-    async fn spawn_with_config(cmd: &str, args: &[&str], config: TerminalConfig) -> Result<Self> {
+    async fn spawn_with_config(
+        cmd: &str,
+        args: &[&str],
+        config: TerminalConfig,
+        inject_default_env: bool,
+        osc_emulation: bool,
+    ) -> Result<Self> {
         let pty_system = native_pty_system();
 
         let pair = pty_system
@@ -144,8 +189,20 @@ impl Terminal {
             cmd_builder.env(key, value);
         }
 
-        // Set TERM to something reasonable
-        cmd_builder.env("TERM", "xterm-256color");
+        // Inject default terminal env vars unless disabled.
+        if inject_default_env {
+            if !config.env.contains_key("TERM") {
+                cmd_builder.env("TERM", "xterm-256color");
+            }
+            if !config.env.contains_key("COLORTERM") {
+                cmd_builder.env("COLORTERM", "truecolor");
+            }
+            // NO_COLOR forces many TUIs to disable color surfaces entirely.
+            // Clear it unless caller explicitly set NO_COLOR via session env.
+            if !config.env.contains_key("NO_COLOR") {
+                cmd_builder.env_remove("NO_COLOR");
+            }
+        }
 
         // Set working directory if specified
         if let Some(ref cwd) = config.working_dir {
@@ -163,9 +220,11 @@ impl Terminal {
             .try_clone_reader()
             .map_err(|e| TermwrightError::SpawnFailed(e.to_string()))?;
 
-        let writer = master
-            .take_writer()
-            .map_err(|e| TermwrightError::SpawnFailed(e.to_string()))?;
+        let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(
+            master
+                .take_writer()
+                .map_err(|e| TermwrightError::SpawnFailed(e.to_string()))?,
+        ));
 
         let parser = Arc::new(Mutex::new(vt100::Parser::new(
             config.rows,
@@ -173,6 +232,9 @@ impl Terminal {
             1000, // scrollback lines
         )));
         let parser_clone = parser.clone();
+        let writer_clone = writer.clone();
+        let mut osc = osc_emulation.then(|| OscEmulator::new(initial_color_state()));
+        let mut csi = CsiEmulator::new();
 
         let exited = Arc::new(Mutex::new(None));
         let exited_clone = exited.clone();
@@ -198,6 +260,27 @@ impl Terminal {
                         rt.block_on(async {
                             let mut parser = parser_clone.lock().await;
                             parser.process(&buf[..n]);
+
+                            let cursor = {
+                                let cursor = parser.screen().cursor_position();
+                                crate::screen::Position::new(cursor.0, cursor.1)
+                            };
+
+                            let mut responses = Vec::new();
+                            if let Some(osc) = osc.as_mut() {
+                                responses.extend(osc.process_output(&buf[..n]));
+                            }
+                            responses.extend(csi.process_output(&buf[..n], cursor));
+
+                            drop(parser);
+
+                            if !responses.is_empty() {
+                                let mut writer = writer_clone.lock().await;
+                                for response in responses {
+                                    let _ = writer.write_all(&response);
+                                }
+                                let _ = writer.flush();
+                            }
                         });
                     }
                     Err(_) => {
@@ -217,7 +300,7 @@ impl Terminal {
 
         Ok(Self {
             master: Arc::new(Mutex::new(master)),
-            writer: Arc::new(Mutex::new(Box::new(writer))),
+            writer,
             parser,
             config,
             _reader_handle: reader_handle,

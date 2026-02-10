@@ -54,6 +54,10 @@ pub struct SessionConfig {
     #[serde(default)]
     pub env: HashMap<String, String>,
     #[serde(default)]
+    pub no_default_env: bool,
+    #[serde(default)]
+    pub no_osc_emulation: bool,
+    #[serde(default)]
     pub cwd: Option<PathBuf>,
 }
 

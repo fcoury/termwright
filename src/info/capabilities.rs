@@ -43,6 +43,16 @@ impl CapabilitiesInfo {
                     available: true,
                 },
                 FeatureInfo {
+                    name: "osc_color_emulation",
+                    description: "OSC 10/11/12 color query emulation",
+                    available: true,
+                },
+                FeatureInfo {
+                    name: "csi_cursor_query_emulation",
+                    description: "CSI 6n/?6n cursor position query emulation",
+                    available: true,
+                },
+                FeatureInfo {
                     name: "negative_assertions",
                     description: "notExpectText/notExpectPattern steps",
                     available: true,

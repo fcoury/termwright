@@ -21,6 +21,8 @@ use termwright::terminal::Terminal;
 pub struct RunStepsOptions {
     pub connect: Option<PathBuf>,
     pub trace: bool,
+    pub no_default_env: bool,
+    pub no_osc_emulation: bool,
 }
 
 pub async fn run_steps(path: &Path, options: RunStepsOptions) -> Result<()> {
@@ -36,7 +38,10 @@ pub async fn run_steps(path: &Path, options: RunStepsOptions) -> Result<()> {
             )
         })?;
 
-        let (socket, handle) = spawn_daemon(session).await?;
+        let disable_default_env = options.no_default_env || session.no_default_env;
+        let disable_osc_emulation = options.no_osc_emulation || session.no_osc_emulation;
+        let (socket, handle) =
+            spawn_daemon(session, disable_default_env, disable_osc_emulation).await?;
         let client = connect_daemon(&socket).await?;
         (client, Some(handle))
     };
@@ -186,10 +191,7 @@ async fn expect_pattern_step(client: &DaemonClient, step: &ExpectPatternStep) ->
         .await
 }
 
-async fn wait_for_text_gone_step(
-    client: &DaemonClient,
-    step: &WaitForTextGoneStep,
-) -> Result<()> {
+async fn wait_for_text_gone_step(client: &DaemonClient, step: &WaitForTextGoneStep) -> Result<()> {
     client
         .wait_for_text_gone(&step.text, timeout(step.timeout_ms))
         .await
@@ -208,10 +210,7 @@ async fn not_expect_text_step(client: &DaemonClient, step: &NotExpectTextStep) -
     client.not_expect_text(&step.text).await
 }
 
-async fn not_expect_pattern_step(
-    client: &DaemonClient,
-    step: &NotExpectPatternStep,
-) -> Result<()> {
+async fn not_expect_pattern_step(client: &DaemonClient, step: &NotExpectPatternStep) -> Result<()> {
     client.not_expect_pattern(&step.pattern).await
 }
 
@@ -221,11 +220,19 @@ fn timeout(timeout_ms: Option<u64>) -> Option<Duration> {
 
 async fn spawn_daemon(
     session: &SessionConfig,
+    no_default_env: bool,
+    no_osc_emulation: bool,
 ) -> Result<(PathBuf, tokio::task::JoinHandle<Result<()>>)> {
     let (command, args) = session.command_and_args()?;
     let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
     let mut builder = Terminal::builder().size(session.cols(), session.rows());
+    if no_default_env {
+        builder = builder.no_default_env();
+    }
+    if no_osc_emulation {
+        builder = builder.no_osc_emulation();
+    }
     for (key, value) in &session.env {
         builder = builder.env(key, value);
     }

@@ -269,6 +269,12 @@ Common key names for the `press` command:
 
 ## CLI Reference
 
+Global options (apply to any command that spawns a terminal):
+
+- `--no-default-env`: Disable default terminal env handling (`TERM`/`COLORTERM` injection and clearing inherited `NO_COLOR`).
+- `--no-osc-emulation`: Disable OSC 10/11/12 color query emulation.
+- Terminal query emulation defaults to on for OSC 10/11/12 and CSI 6n/?6n cursor-position requests.
+
 ### `termwright fonts`
 
 List available font families on the system (helpful for selecting a monospace font for screenshots).
@@ -322,6 +328,11 @@ Options:
   --connect <PATH>       Connect to an existing daemon socket instead of spawning
   --trace                Write a trace.json file in the artifacts directory
 ```
+
+When using `run-steps`, you can also control spawn behavior per session:
+
+- `session.noDefaultEnv: true` disables default terminal env handling (`TERM`/`COLORTERM` injection and clearing inherited `NO_COLOR`).
+- `session.noOscEmulation: true` disables OSC 10/11/12 emulation for that session.
 
 ### `termwright exec`
 

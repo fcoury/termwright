@@ -142,23 +142,19 @@ fn all_keys() -> Vec<KeyCategory> {
         },
         KeyCategory {
             name: "Function",
-            keys: vec![
-                KeyInfo {
-                    name: "F1-F12",
-                    aliases: vec![],
-                    description: "Function keys (e.g., F1, F2, ... F12)",
-                },
-            ],
+            keys: vec![KeyInfo {
+                name: "F1-F12",
+                aliases: vec![],
+                description: "Function keys (e.g., F1, F2, ... F12)",
+            }],
         },
         KeyCategory {
             name: "Characters",
-            keys: vec![
-                KeyInfo {
-                    name: "<char>",
-                    aliases: vec![],
-                    description: "Any single character (a, A, 1, @, etc.)",
-                },
-            ],
+            keys: vec![KeyInfo {
+                name: "<char>",
+                aliases: vec![],
+                description: "Any single character (a, A, 1, @, etc.)",
+            }],
         },
     ]
 }

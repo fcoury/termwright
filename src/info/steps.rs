@@ -28,9 +28,7 @@ pub struct StepsOverview {
 
 impl StepsOverview {
     pub fn new() -> Self {
-        Self {
-            steps: all_steps(),
-        }
+        Self { steps: all_steps() }
     }
 
     pub fn to_text(&self) -> String {
@@ -59,7 +57,9 @@ impl StepsOverview {
     }
 
     pub fn get(&self, name: &str) -> Option<&StepInfo> {
-        self.steps.iter().find(|s| s.name.eq_ignore_ascii_case(name))
+        self.steps
+            .iter()
+            .find(|s| s.name.eq_ignore_ascii_case(name))
     }
 }
 
@@ -78,7 +78,11 @@ impl StepInfo {
 
         out.push_str("Parameters:\n");
         for param in &self.params {
-            let req = if param.required { "(required)" } else { "(optional)" };
+            let req = if param.required {
+                "(required)"
+            } else {
+                "(optional)"
+            };
             out.push_str(&format!("  {} {} [{}]\n", param.name, req, param.r#type));
             out.push_str(&format!("      {}\n", param.description));
             if let Some(default) = param.default {

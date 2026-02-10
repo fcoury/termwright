@@ -30,6 +30,14 @@ use runner::RunStepsOptions;
     about = "Playwright-like automation for terminal TUI applications"
 )]
 struct Cli {
+    /// Disable default terminal env injection (TERM/COLORTERM and clearing inherited NO_COLOR).
+    #[arg(long, global = true)]
+    no_default_env: bool,
+
+    /// Disable OSC 10/11/12 color query emulation.
+    #[arg(long, global = true)]
+    no_osc_emulation: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -284,6 +292,8 @@ impl std::str::FromStr for OutputFormat {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    let no_default_env = cli.no_default_env;
+    let no_osc_emulation = cli.no_osc_emulation;
 
     match cli.command {
         Commands::Fonts => {
@@ -300,7 +310,16 @@ async fn main() -> Result<()> {
             args,
         } => {
             run_command(
-                cols, rows, wait_for, delay, format, timeout, &command, &args,
+                cols,
+                rows,
+                wait_for,
+                delay,
+                format,
+                timeout,
+                no_default_env,
+                no_osc_emulation,
+                &command,
+                &args,
             )
             .await?;
         }
@@ -317,7 +336,18 @@ async fn main() -> Result<()> {
             args,
         } => {
             take_screenshot(
-                cols, rows, wait_for, delay, output, font, font_size, timeout, &command, &args,
+                cols,
+                rows,
+                wait_for,
+                delay,
+                output,
+                font,
+                font_size,
+                timeout,
+                no_default_env,
+                no_osc_emulation,
+                &command,
+                &args,
             )
             .await?;
         }
@@ -326,7 +356,16 @@ async fn main() -> Result<()> {
             connect,
             trace,
         } => {
-            runner::run_steps(&file, RunStepsOptions { connect, trace }).await?;
+            runner::run_steps(
+                &file,
+                RunStepsOptions {
+                    connect,
+                    trace,
+                    no_default_env,
+                    no_osc_emulation,
+                },
+            )
+            .await?;
         }
         Commands::Exec {
             socket,
@@ -350,6 +389,8 @@ async fn main() -> Result<()> {
                 socket,
                 background,
                 background_child,
+                no_default_env,
+                no_osc_emulation,
                 &command,
                 &args,
             )
@@ -364,7 +405,17 @@ async fn main() -> Result<()> {
                 command,
                 args,
             } => {
-                hub_start(count, cols, rows, output.as_ref(), &command, &args).await?;
+                hub_start(
+                    count,
+                    cols,
+                    rows,
+                    output.as_ref(),
+                    no_default_env,
+                    no_osc_emulation,
+                    &command,
+                    &args,
+                )
+                .await?;
             }
             HubCommands::Stop { socket, input } => {
                 hub_stop(&socket, input.as_ref()).await?;
@@ -385,15 +436,22 @@ async fn run_command(
     delay: u64,
     format: OutputFormat,
     timeout: u64,
+    no_default_env: bool,
+    no_osc_emulation: bool,
     command: &str,
     args: &[String],
 ) -> Result<()> {
     let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-    let term = Terminal::builder()
-        .size(cols, rows)
-        .spawn(command, &args_str)
-        .await?;
+    let mut builder = Terminal::builder().size(cols, rows);
+    if no_default_env {
+        builder = builder.no_default_env();
+    }
+    if no_osc_emulation {
+        builder = builder.no_osc_emulation();
+    }
+
+    let term = builder.spawn(command, &args_str).await?;
 
     // Wait for text if specified
     if let Some(text) = wait_for {
@@ -480,6 +538,8 @@ async fn hub_start(
     cols: u16,
     rows: u16,
     output: Option<&PathBuf>,
+    no_default_env: bool,
+    no_osc_emulation: bool,
     command: &str,
     args: &[String],
 ) -> Result<()> {
@@ -491,7 +551,16 @@ async fn hub_start(
             std::process::id(),
             index + 1
         ));
-        let pid = spawn_background_daemon(cols, rows, &socket, command, args).await?;
+        let pid = spawn_background_daemon(
+            cols,
+            rows,
+            &socket,
+            no_default_env,
+            no_osc_emulation,
+            command,
+            args,
+        )
+        .await?;
         entries.push(HubEntry { socket, pid });
     }
 
@@ -534,6 +603,8 @@ async fn spawn_background_daemon(
     cols: u16,
     rows: u16,
     socket: &PathBuf,
+    no_default_env: bool,
+    no_osc_emulation: bool,
     command: &str,
     args: &[String],
 ) -> Result<u32> {
@@ -549,9 +620,16 @@ async fn spawn_background_daemon(
         .arg(rows.to_string())
         .arg("--socket")
         .arg(socket)
-        .arg("--background-child")
-        .arg("--")
-        .arg(command);
+        .arg("--background-child");
+
+    if no_default_env {
+        child.arg("--no-default-env");
+    }
+    if no_osc_emulation {
+        child.arg("--no-osc-emulation");
+    }
+
+    child.arg("--").arg(command);
 
     for arg in args {
         child.arg(arg);
@@ -627,15 +705,22 @@ async fn take_screenshot(
     font: Option<String>,
     font_size: f32,
     timeout: u64,
+    no_default_env: bool,
+    no_osc_emulation: bool,
     command: &str,
     args: &[String],
 ) -> Result<()> {
     let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-    let term = Terminal::builder()
-        .size(cols, rows)
-        .spawn(command, &args_str)
-        .await?;
+    let mut builder = Terminal::builder().size(cols, rows);
+    if no_default_env {
+        builder = builder.no_default_env();
+    }
+    if no_osc_emulation {
+        builder = builder.no_osc_emulation();
+    }
+
+    let term = builder.spawn(command, &args_str).await?;
 
     // Wait for text if specified
     if let Some(text) = wait_for {
@@ -682,6 +767,8 @@ async fn run_daemon_command(
     socket: Option<PathBuf>,
     background: bool,
     background_child: bool,
+    no_default_env: bool,
+    no_osc_emulation: bool,
     command: &str,
     args: &[String],
 ) -> Result<()> {
@@ -704,9 +791,16 @@ async fn run_daemon_command(
             .arg(rows.to_string())
             .arg("--socket")
             .arg(&socket)
-            .arg("--background-child")
-            .arg("--")
-            .arg(command);
+            .arg("--background-child");
+
+        if no_default_env {
+            child.arg("--no-default-env");
+        }
+        if no_osc_emulation {
+            child.arg("--no-osc-emulation");
+        }
+
+        child.arg("--").arg(command);
 
         for arg in args {
             child.arg(arg);
@@ -745,10 +839,15 @@ async fn run_daemon_command(
         return Ok(());
     }
 
-    let terminal = Terminal::builder()
-        .size(cols, rows)
-        .spawn(command, &args_str)
-        .await?;
+    let mut builder = Terminal::builder().size(cols, rows);
+    if no_default_env {
+        builder = builder.no_default_env();
+    }
+    if no_osc_emulation {
+        builder = builder.no_osc_emulation();
+    }
+
+    let terminal = builder.spawn(command, &args_str).await?;
 
     // The socket path is the main handle clients need.
     if !background_child {
@@ -789,7 +888,8 @@ fn run_info_command(command: Option<InfoCommands>, json: bool) -> Result<()> {
                         if json {
                             println!(
                                 "{}",
-                                serde_json::to_string_pretty(step).map_err(TermwrightError::Json)?
+                                serde_json::to_string_pretty(step)
+                                    .map_err(TermwrightError::Json)?
                             );
                         } else {
                             print!("{}", step.to_text());
