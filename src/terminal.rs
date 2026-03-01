@@ -420,9 +420,8 @@ impl Terminal {
         direction: ScrollDirection,
         count: u16,
     ) -> Result<&Self> {
-        let code = direction.sgr_code();
+        let bytes = encode_sgr_mouse(direction.sgr_code(), row, col, true);
         for _ in 0..count {
-            let bytes = encode_sgr_mouse(code, row, col, true);
             self.send_raw(&bytes).await?;
         }
         Ok(self)
