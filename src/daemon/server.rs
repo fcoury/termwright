@@ -348,6 +348,23 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 }
                 Ok(Response::ok_empty(id))
             }
+            "find_text" => {
+                let params: FindTextParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let screen = terminal.screen().await;
+                let matches = screen.find_text(&params.text);
+                Ok(Response::ok(id, matches)?)
+            }
+            "find_pattern" => {
+                let params: FindPatternParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let screen = terminal.screen().await;
+                let matches = screen.find_pattern(&params.pattern)
+                    .map_err(|e| TermwrightError::Protocol(format!("invalid regex: {}", e)))?;
+                Ok(Response::ok(id, matches)?)
+            }
             "wait_for_exit" => {
                 let params: WaitForExitParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;

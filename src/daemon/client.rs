@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use crate::daemon::protocol::*;
 use crate::error::{Result, TermwrightError};
 use crate::input::{MouseButton, ScrollDirection};
-use crate::screen::Screen;
+use crate::screen::{Screen, TextMatch};
 
 pub struct DaemonClient {
     next_id: AtomicU64,
@@ -83,6 +83,16 @@ impl DaemonClient {
         base64::engine::general_purpose::STANDARD
             .decode(res.png_base64)
             .map_err(|e| TermwrightError::Protocol(e.to_string()))
+    }
+
+    pub async fn find_text(&self, text: impl Into<String>) -> Result<Vec<TextMatch>> {
+        self.call("find_text", FindTextParams { text: text.into() })
+            .await
+    }
+
+    pub async fn find_pattern(&self, pattern: impl Into<String>) -> Result<Vec<TextMatch>> {
+        self.call("find_pattern", FindPatternParams { pattern: pattern.into() })
+            .await
     }
 
     pub async fn r#type(&self, text: impl Into<String>) -> Result<()> {

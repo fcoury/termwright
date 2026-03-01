@@ -62,6 +62,11 @@ impl CapabilitiesInfo {
                     description: "waitForTextGone/waitForPatternGone steps",
                     available: true,
                 },
+                FeatureInfo {
+                    name: "text_search",
+                    description: "findText/findPattern with position results",
+                    available: true,
+                },
             ],
         }
     }

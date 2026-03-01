@@ -195,6 +195,16 @@ pub struct ResizeParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct FindTextParams {
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FindPatternParams {
+    pub pattern: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StatusResult {
     pub exited: bool,
     pub exit_code: Option<i32>,

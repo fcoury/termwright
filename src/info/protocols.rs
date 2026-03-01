@@ -278,6 +278,25 @@ fn all_methods() -> Vec<MethodInfo> {
             example_request: r#"{"id":1,"method":"not_expect_pattern","params":{"pattern":"error|fail"}}"#,
             example_response: r#"{"id":1,"result":null}"#,
         },
+        // Search
+        MethodInfo {
+            name: "find_text",
+            category: "search",
+            brief: "Find all occurrences of text on screen",
+            params: r#"{text: string}"#,
+            response: r#"[{position: {row, col}, text: string, length: number}]"#,
+            example_request: r#"{"id":1,"method":"find_text","params":{"text":"Ready"}}"#,
+            example_response: r#"{"id":1,"result":[{"position":{"row":5,"col":10},"text":"Ready","length":5}]}"#,
+        },
+        MethodInfo {
+            name: "find_pattern",
+            category: "search",
+            brief: "Find all regex matches on screen",
+            params: r#"{pattern: string}"#,
+            response: r#"[{position: {row, col}, text: string, length: number}]"#,
+            example_request: r#"{"id":1,"method":"find_pattern","params":{"pattern":"v\\d+\\.\\d+"}}"#,
+            example_response: r#"{"id":1,"result":[{"position":{"row":0,"col":12},"text":"v0.2.0","length":6}]}"#,
+        },
         // Control
         MethodInfo {
             name: "resize",

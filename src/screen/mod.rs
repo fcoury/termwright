@@ -480,7 +480,7 @@ fn is_vertical_line(c: char) -> bool {
 }
 
 /// A text match found on the screen.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextMatch {
     /// Position of the match.
     pub position: Position,
