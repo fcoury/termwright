@@ -184,6 +184,31 @@ pub enum Step {
     Screenshot {
         screenshot: ScreenshotStep,
     },
+    MouseClick {
+        #[serde(rename = "mouseClick")]
+        mouse_click: MouseClickStep,
+    },
+    MouseScroll {
+        #[serde(rename = "mouseScroll")]
+        mouse_scroll: MouseScrollStep,
+    },
+    MouseMove {
+        #[serde(rename = "mouseMove")]
+        mouse_move: MouseMoveStep,
+    },
+    WaitForExit {
+        #[serde(rename = "waitForExit")]
+        wait_for_exit: WaitForExitStep,
+    },
+    Resize {
+        resize: ResizeStep,
+    },
+    Sleep {
+        sleep: SleepStep,
+    },
+    Raw {
+        raw: RawStep,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -281,4 +306,63 @@ pub struct NotExpectPatternStep {
 pub struct ScreenshotStep {
     #[serde(default)]
     pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseClickStep {
+    pub row: u16,
+    pub col: u16,
+    #[serde(default)]
+    pub button: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseScrollStep {
+    pub row: u16,
+    pub col: u16,
+    #[serde(default = "MouseScrollStep::default_direction")]
+    pub direction: String,
+    #[serde(default)]
+    pub count: Option<u16>,
+}
+
+impl MouseScrollStep {
+    fn default_direction() -> String {
+        "down".to_string()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseMoveStep {
+    pub row: u16,
+    pub col: u16,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitForExitStep {
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResizeStep {
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SleepStep {
+    pub ms: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RawStep {
+    pub bytes_base64: String,
 }

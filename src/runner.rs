@@ -13,6 +13,7 @@ use crate::steps::{
     NotExpectTextStep, ScreenshotStep, SessionConfig, Step, StepsFile, WaitForPatternGoneStep,
     WaitForTextGoneStep,
 };
+use termwright::input::{MouseButton, ScrollDirection};
 use termwright::daemon::client::DaemonClient;
 use termwright::daemon::server::{DaemonConfig, run_daemon};
 use termwright::error::{Result, TermwrightError};
@@ -176,6 +177,52 @@ async fn execute_step(client: &DaemonClient, step: &Step) -> Result<()> {
             not_expect_pattern_step(client, not_expect_pattern).await
         }
         Step::Screenshot { .. } => Ok(()),
+        Step::MouseClick { mouse_click } => {
+            let button = mouse_click
+                .button
+                .as_deref()
+                .unwrap_or("left")
+                .parse::<MouseButton>()
+                .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+            client
+                .mouse_click(mouse_click.row, mouse_click.col, button)
+                .await
+        }
+        Step::MouseScroll { mouse_scroll } => {
+            let direction = mouse_scroll
+                .direction
+                .parse::<ScrollDirection>()
+                .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+            client
+                .mouse_scroll(
+                    mouse_scroll.row,
+                    mouse_scroll.col,
+                    direction,
+                    mouse_scroll.count,
+                )
+                .await
+        }
+        Step::MouseMove { mouse_move } => {
+            client
+                .mouse_move(mouse_move.row, mouse_move.col)
+                .await
+        }
+        Step::WaitForExit { wait_for_exit } => {
+            client
+                .wait_for_exit(timeout(wait_for_exit.timeout_ms))
+                .await?;
+            Ok(())
+        }
+        Step::Resize { resize } => {
+            client.resize(resize.cols, resize.rows).await
+        }
+        Step::Sleep { sleep: sleep_step } => {
+            tokio::time::sleep(Duration::from_millis(sleep_step.ms)).await;
+            Ok(())
+        }
+        Step::Raw { raw } => {
+            client.raw(&raw.bytes_base64).await
+        }
     }
 }
 
@@ -381,6 +428,13 @@ fn step_label(step: &Step) -> String {
         Step::NotExpectText { .. } => "notExpectText".to_string(),
         Step::NotExpectPattern { .. } => "notExpectPattern".to_string(),
         Step::Screenshot { .. } => "screenshot".to_string(),
+        Step::MouseClick { .. } => "mouseClick".to_string(),
+        Step::MouseScroll { .. } => "mouseScroll".to_string(),
+        Step::MouseMove { .. } => "mouseMove".to_string(),
+        Step::WaitForExit { .. } => "waitForExit".to_string(),
+        Step::Resize { .. } => "resize".to_string(),
+        Step::Sleep { .. } => "sleep".to_string(),
+        Step::Raw { .. } => "raw".to_string(),
     }
 }
 

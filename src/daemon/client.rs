@@ -275,6 +275,35 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn wait_for_exit(&self, timeout: Option<Duration>) -> Result<i32> {
+        let res: WaitForExitResult = self
+            .call(
+                "wait_for_exit",
+                WaitForExitParams {
+                    timeout_ms: timeout.map(|d| d.as_millis() as u64),
+                },
+            )
+            .await?;
+        Ok(res.exit_code)
+    }
+
+    pub async fn resize(&self, cols: u16, rows: u16) -> Result<()> {
+        self.call::<_, serde_json::Value>("resize", ResizeParams { cols, rows })
+            .await?;
+        Ok(())
+    }
+
+    pub async fn raw(&self, bytes_base64: impl Into<String>) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "raw",
+            RawParams {
+                bytes_base64: bytes_base64.into(),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn close(&self) -> Result<()> {
         let _ = self
             .call::<_, serde_json::Value>("close", serde_json::Value::Null)

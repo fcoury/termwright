@@ -386,5 +386,172 @@ fn all_steps() -> Vec<StepInfo> {
                 "Saved to the artifacts directory",
             ],
         },
+        // Mouse steps
+        StepInfo {
+            name: "mouseClick",
+            category: "input",
+            brief: "Click mouse at a screen position",
+            params: vec![
+                ParamInfo {
+                    name: "row",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "Row position (0-indexed)",
+                },
+                ParamInfo {
+                    name: "col",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "Column position (0-indexed)",
+                },
+                ParamInfo {
+                    name: "button",
+                    required: false,
+                    r#type: "string",
+                    default: Some("left"),
+                    description: "Mouse button: left, right, or middle",
+                },
+            ],
+            example: r#"mouseClick: {row: 5, col: 10}"#,
+            tips: vec!["Uses SGR 1006 mouse encoding"],
+        },
+        StepInfo {
+            name: "mouseScroll",
+            category: "input",
+            brief: "Scroll mouse wheel at a position",
+            params: vec![
+                ParamInfo {
+                    name: "row",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "Row position (0-indexed)",
+                },
+                ParamInfo {
+                    name: "col",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "Column position (0-indexed)",
+                },
+                ParamInfo {
+                    name: "direction",
+                    required: false,
+                    r#type: "string",
+                    default: Some("down"),
+                    description: "Scroll direction: up or down",
+                },
+                ParamInfo {
+                    name: "count",
+                    required: false,
+                    r#type: "number",
+                    default: Some("3"),
+                    description: "Number of scroll events",
+                },
+            ],
+            example: r#"mouseScroll: {row: 5, col: 10, direction: "down", count: 5}"#,
+            tips: vec!["Default count is 3 scroll events"],
+        },
+        StepInfo {
+            name: "mouseMove",
+            category: "input",
+            brief: "Move mouse cursor to a position",
+            params: vec![
+                ParamInfo {
+                    name: "row",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "Row position (0-indexed)",
+                },
+                ParamInfo {
+                    name: "col",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "Column position (0-indexed)",
+                },
+            ],
+            example: r#"mouseMove: {row: 5, col: 10}"#,
+            tips: vec!["Useful for hover effects in TUI apps"],
+        },
+        // Wait steps (additional)
+        StepInfo {
+            name: "waitForExit",
+            category: "wait",
+            brief: "Wait for the process to exit",
+            params: vec![ParamInfo {
+                name: "timeoutMs",
+                required: false,
+                r#type: "number",
+                default: Some("30000"),
+                description: "Timeout in milliseconds",
+            }],
+            example: r#"waitForExit: {timeoutMs: 10000}"#,
+            tips: vec![
+                "Returns the exit code of the process",
+                "Useful as the final step in a test",
+            ],
+        },
+        // Control steps
+        StepInfo {
+            name: "resize",
+            category: "control",
+            brief: "Resize the terminal",
+            params: vec![
+                ParamInfo {
+                    name: "cols",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "New column count",
+                },
+                ParamInfo {
+                    name: "rows",
+                    required: true,
+                    r#type: "number",
+                    default: None,
+                    description: "New row count",
+                },
+            ],
+            example: r#"resize: {cols: 120, rows: 40}"#,
+            tips: vec!["Useful for testing responsive TUI layouts"],
+        },
+        StepInfo {
+            name: "sleep",
+            category: "control",
+            brief: "Pause execution for a duration",
+            params: vec![ParamInfo {
+                name: "ms",
+                required: true,
+                r#type: "number",
+                default: None,
+                description: "Duration in milliseconds",
+            }],
+            example: r#"sleep: {ms: 1000}"#,
+            tips: vec![
+                "Prefer waitForText or waitForIdle over sleep",
+                "Use as a last resort when no wait condition applies",
+            ],
+        },
+        StepInfo {
+            name: "raw",
+            category: "input",
+            brief: "Send raw bytes to the terminal",
+            params: vec![ParamInfo {
+                name: "bytesBase64",
+                required: true,
+                r#type: "string",
+                default: None,
+                description: "Base64-encoded bytes to send",
+            }],
+            example: r#"raw: {bytesBase64: "G1s="}"#,
+            tips: vec![
+                "Use for escape sequences not covered by other steps",
+                "G1s= is base64 for ESC[",
+            ],
+        },
     ]
 }
