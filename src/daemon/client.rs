@@ -11,8 +11,8 @@ use tokio::sync::Mutex;
 
 use crate::daemon::protocol::*;
 use crate::error::{Result, TermwrightError};
-use crate::input::MouseButton;
-use crate::screen::Screen;
+use crate::input::{MouseButton, ScrollDirection};
+use crate::screen::{Screen, TextMatch};
 
 pub struct DaemonClient {
     next_id: AtomicU64,
@@ -85,6 +85,16 @@ impl DaemonClient {
             .map_err(|e| TermwrightError::Protocol(e.to_string()))
     }
 
+    pub async fn find_text(&self, text: impl Into<String>) -> Result<Vec<TextMatch>> {
+        self.call("find_text", FindTextParams { text: text.into() })
+            .await
+    }
+
+    pub async fn find_pattern(&self, pattern: impl Into<String>) -> Result<Vec<TextMatch>> {
+        self.call("find_pattern", FindPatternParams { pattern: pattern.into() })
+            .await
+    }
+
     pub async fn r#type(&self, text: impl Into<String>) -> Result<()> {
         self.call::<_, serde_json::Value>("type", TypeParams { text: text.into() })
             .await?;
@@ -130,6 +140,26 @@ impl DaemonClient {
                 row,
                 col,
                 button: Some(button.to_string()),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn mouse_scroll(
+        &self,
+        row: u16,
+        col: u16,
+        direction: ScrollDirection,
+        count: Option<u16>,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "mouse_scroll",
+            MouseScrollParams {
+                row,
+                col,
+                direction: direction.to_string(),
+                count,
             },
         )
         .await?;
@@ -239,6 +269,57 @@ impl DaemonClient {
             "not_expect_pattern",
             NotExpectPatternParams {
                 pattern: pattern.into(),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn detect_boxes(&self) -> Result<Vec<crate::screen::DetectedBox>> {
+        self.call("detect_boxes", serde_json::Value::Null).await
+    }
+
+    pub async fn wait_for_cursor_at(
+        &self,
+        row: u16,
+        col: u16,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "wait_for_cursor_at",
+            WaitForCursorAtParams {
+                row,
+                col,
+                timeout_ms: timeout.map(|d| d.as_millis() as u64),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn wait_for_exit(&self, timeout: Option<Duration>) -> Result<i32> {
+        let res: WaitForExitResult = self
+            .call(
+                "wait_for_exit",
+                WaitForExitParams {
+                    timeout_ms: timeout.map(|d| d.as_millis() as u64),
+                },
+            )
+            .await?;
+        Ok(res.exit_code)
+    }
+
+    pub async fn resize(&self, cols: u16, rows: u16) -> Result<()> {
+        self.call::<_, serde_json::Value>("resize", ResizeParams { cols, rows })
+            .await?;
+        Ok(())
+    }
+
+    pub async fn raw(&self, bytes_base64: impl Into<String>) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "raw",
+            RawParams {
+                bytes_base64: bytes_base64.into(),
             },
         )
         .await?;

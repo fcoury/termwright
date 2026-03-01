@@ -40,3 +40,42 @@ impl MouseButton {
         }
     }
 }
+
+/// Scroll wheel direction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollDirection {
+    Up,
+    Down,
+}
+
+impl FromStr for ScrollDirection {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "up" => Ok(ScrollDirection::Up),
+            "down" => Ok(ScrollDirection::Down),
+            other => Err(format!("unknown scroll direction: {other}")),
+        }
+    }
+}
+
+impl std::fmt::Display for ScrollDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScrollDirection::Up => write!(f, "up"),
+            ScrollDirection::Down => write!(f, "down"),
+        }
+    }
+}
+
+impl ScrollDirection {
+    /// SGR mouse code for scroll events.
+    /// Scroll up = 64, scroll down = 65.
+    pub(crate) fn sgr_code(self) -> u8 {
+        match self {
+            ScrollDirection::Up => 64,
+            ScrollDirection::Down => 65,
+        }
+    }
+}

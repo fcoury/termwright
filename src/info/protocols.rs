@@ -195,6 +195,15 @@ fn all_methods() -> Vec<MethodInfo> {
             example_request: r#"{"id":1,"method":"mouse_move","params":{"row":5,"col":10}}"#,
             example_response: r#"{"id":1,"result":null}"#,
         },
+        MethodInfo {
+            name: "mouse_scroll",
+            category: "input",
+            brief: "Scroll mouse wheel at position",
+            params: r#"{row: number, col: number, direction: "up"|"down", count?: number (default: 3)}"#,
+            response: "null",
+            example_request: r#"{"id":1,"method":"mouse_scroll","params":{"row":5,"col":10,"direction":"down","count":3}}"#,
+            example_response: r#"{"id":1,"result":null}"#,
+        },
         // Wait
         MethodInfo {
             name: "wait_for_text",
@@ -267,6 +276,44 @@ fn all_methods() -> Vec<MethodInfo> {
             params: r#"{pattern: string}"#,
             response: "null (or error if pattern matches)",
             example_request: r#"{"id":1,"method":"not_expect_pattern","params":{"pattern":"error|fail"}}"#,
+            example_response: r#"{"id":1,"result":null}"#,
+        },
+        // Search
+        MethodInfo {
+            name: "find_text",
+            category: "search",
+            brief: "Find all occurrences of text on screen",
+            params: r#"{text: string}"#,
+            response: r#"[{position: {row, col}, text: string, length: number}]"#,
+            example_request: r#"{"id":1,"method":"find_text","params":{"text":"Ready"}}"#,
+            example_response: r#"{"id":1,"result":[{"position":{"row":5,"col":10},"text":"Ready","length":5}]}"#,
+        },
+        MethodInfo {
+            name: "find_pattern",
+            category: "search",
+            brief: "Find all regex matches on screen",
+            params: r#"{pattern: string}"#,
+            response: r#"[{position: {row, col}, text: string, length: number}]"#,
+            example_request: r#"{"id":1,"method":"find_pattern","params":{"pattern":"v\\d+\\.\\d+"}}"#,
+            example_response: r#"{"id":1,"result":[{"position":{"row":0,"col":12},"text":"v0.2.0","length":6}]}"#,
+        },
+        // Inspect
+        MethodInfo {
+            name: "detect_boxes",
+            category: "inspect",
+            brief: "Detect box-drawing rectangles on screen",
+            params: "null",
+            response: r#"[{region: {start, end}, inner_region: {start, end}, style: "single"|"double"|"mixed"}]"#,
+            example_request: r#"{"id":1,"method":"detect_boxes","params":null}"#,
+            example_response: r#"{"id":1,"result":[{"region":{"start":{"row":0,"col":0},"end":{"row":5,"col":40}},"inner_region":{"start":{"row":1,"col":1},"end":{"row":4,"col":39}},"style":"single"}]}"#,
+        },
+        MethodInfo {
+            name: "wait_for_cursor_at",
+            category: "wait",
+            brief: "Wait for cursor to reach a position",
+            params: r#"{row: number, col: number, timeout_ms?: number}"#,
+            response: "null",
+            example_request: r#"{"id":1,"method":"wait_for_cursor_at","params":{"row":0,"col":5,"timeout_ms":5000}}"#,
             example_response: r#"{"id":1,"result":null}"#,
         },
         // Control

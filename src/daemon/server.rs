@@ -7,7 +7,7 @@ use tokio::net::{UnixListener, UnixStream};
 
 use crate::daemon::protocol::*;
 use crate::error::{Result, TermwrightError};
-use crate::input::{Key, MouseButton};
+use crate::input::{Key, MouseButton, ScrollDirection};
 use crate::terminal::Terminal;
 
 const PROTOCOL_VERSION: u32 = 1;
@@ -250,6 +250,21 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                 terminal.mouse_click(params.row, params.col, button).await?;
                 Ok(Response::ok_empty(id))
             }
+            "mouse_scroll" => {
+                let params: MouseScrollParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let direction = params
+                    .direction
+                    .parse::<ScrollDirection>()
+                    .map_err(|e| TermwrightError::Protocol(e))?;
+
+                let count = params.count.unwrap_or(3);
+                terminal
+                    .mouse_scroll(params.row, params.col, direction, count)
+                    .await?;
+                Ok(Response::ok_empty(id))
+            }
             "wait_for_text" => {
                 let params: WaitForTextParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
@@ -330,6 +345,43 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                         "pattern '{}' matched on screen (expected no match)",
                         params.pattern
                     )));
+                }
+                Ok(Response::ok_empty(id))
+            }
+            "find_text" => {
+                let params: FindTextParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let screen = terminal.screen().await;
+                let matches = screen.find_text(&params.text);
+                Ok(Response::ok(id, matches)?)
+            }
+            "find_pattern" => {
+                let params: FindPatternParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let screen = terminal.screen().await;
+                let matches = screen.find_pattern(&params.pattern)
+                    .map_err(|e| TermwrightError::Protocol(format!("invalid regex: {}", e)))?;
+                Ok(Response::ok(id, matches)?)
+            }
+            "detect_boxes" => {
+                let screen = terminal.screen().await;
+                let boxes = screen.detect_boxes();
+                Ok(Response::ok(id, boxes)?)
+            }
+            "wait_for_cursor_at" => {
+                let params: WaitForCursorAtParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+                let position = crate::screen::Position {
+                    row: params.row,
+                    col: params.col,
+                };
+                let builder = terminal.wait_cursor(position);
+                if let Some(timeout_ms) = params.timeout_ms {
+                    builder.timeout(Duration::from_millis(timeout_ms)).await?;
+                } else {
+                    builder.await?;
                 }
                 Ok(Response::ok_empty(id))
             }

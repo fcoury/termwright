@@ -5,3 +5,4 @@ mod mouse;
 
 pub use keys::Key;
 pub use mouse::MouseButton;
+pub use mouse::ScrollDirection;

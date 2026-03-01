@@ -29,7 +29,7 @@ impl CapabilitiesInfo {
                 },
                 FeatureInfo {
                     name: "mouse",
-                    description: "Mouse input (SGR mode)",
+                    description: "Mouse input with scroll wheel (SGR mode)",
                     available: true,
                 },
                 FeatureInfo {
@@ -60,6 +60,21 @@ impl CapabilitiesInfo {
                 FeatureInfo {
                     name: "pattern_gone",
                     description: "waitForTextGone/waitForPatternGone steps",
+                    available: true,
+                },
+                FeatureInfo {
+                    name: "text_search",
+                    description: "findText/findPattern with position results",
+                    available: true,
+                },
+                FeatureInfo {
+                    name: "box_detection",
+                    description: "detect_boxes for TUI panel discovery",
+                    available: true,
+                },
+                FeatureInfo {
+                    name: "cursor_wait",
+                    description: "wait_for_cursor_at position tracking",
                     available: true,
                 },
             ],

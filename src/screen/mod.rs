@@ -425,7 +425,7 @@ impl Screen {
 }
 
 /// A detected box on the screen.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DetectedBox {
     /// The full region including borders.
     pub region: Region,
@@ -443,7 +443,8 @@ impl DetectedBox {
 }
 
 /// Style of box-drawing characters.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BoxStyle {
     /// Single line box (─, │, ┌, ┐, └, ┘)
     Single,
@@ -480,7 +481,7 @@ fn is_vertical_line(c: char) -> bool {
 }
 
 /// A text match found on the screen.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextMatch {
     /// Position of the match.
     pub position: Position,
@@ -491,7 +492,7 @@ pub struct TextMatch {
 }
 
 /// A rectangular region of the screen.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Region {
     /// Top-left corner.
     pub start: Position,

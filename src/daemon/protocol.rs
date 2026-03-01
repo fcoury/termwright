@@ -131,6 +131,14 @@ pub struct MouseClickParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct MouseScrollParams {
+    pub row: u16,
+    pub col: u16,
+    pub direction: String,
+    pub count: Option<u16>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WaitForTextParams {
     pub text: String,
     pub timeout_ms: Option<u64>,
@@ -184,6 +192,23 @@ pub struct WaitForExitResult {
 pub struct ResizeParams {
     pub cols: u16,
     pub rows: u16,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FindTextParams {
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FindPatternParams {
+    pub pattern: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WaitForCursorAtParams {
+    pub row: u16,
+    pub col: u16,
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
