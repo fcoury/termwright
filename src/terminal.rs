@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 use tokio::time::Instant;
 
 use crate::error::{Result, TermwrightError};
-use crate::input::{Key, MouseButton};
+use crate::input::{Key, MouseButton, ScrollDirection};
 use crate::screen::Screen;
 use crate::wait::{DEFAULT_TIMEOUT, WaitBuilder, WaitCondition};
 
@@ -408,6 +408,24 @@ impl Terminal {
     pub async fn mouse_up(&self, row: u16, col: u16) -> Result<&Self> {
         let bytes = encode_sgr_mouse(3, row, col, false);
         self.send_raw(&bytes).await
+    }
+
+    /// Scroll the mouse wheel at the given cell position.
+    ///
+    /// Sends `count` scroll events in the given direction.
+    pub async fn mouse_scroll(
+        &self,
+        row: u16,
+        col: u16,
+        direction: ScrollDirection,
+        count: u16,
+    ) -> Result<&Self> {
+        let code = direction.sgr_code();
+        for _ in 0..count {
+            let bytes = encode_sgr_mouse(code, row, col, true);
+            self.send_raw(&bytes).await?;
+        }
+        Ok(self)
     }
 
     /// Wait for specific text to appear on screen.

@@ -29,7 +29,7 @@ impl CapabilitiesInfo {
                 },
                 FeatureInfo {
                     name: "mouse",
-                    description: "Mouse input (SGR mode)",
+                    description: "Mouse input with scroll wheel (SGR mode)",
                     available: true,
                 },
                 FeatureInfo {

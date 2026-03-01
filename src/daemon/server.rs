@@ -7,7 +7,7 @@ use tokio::net::{UnixListener, UnixStream};
 
 use crate::daemon::protocol::*;
 use crate::error::{Result, TermwrightError};
-use crate::input::{Key, MouseButton};
+use crate::input::{Key, MouseButton, ScrollDirection};
 use crate::terminal::Terminal;
 
 const PROTOCOL_VERSION: u32 = 1;
@@ -248,6 +248,21 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
 
                 terminal.mouse_click(params.row, params.col, button).await?;
+                Ok(Response::ok_empty(id))
+            }
+            "mouse_scroll" => {
+                let params: MouseScrollParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+
+                let direction = params
+                    .direction
+                    .parse::<ScrollDirection>()
+                    .map_err(|e| TermwrightError::Protocol(e))?;
+
+                let count = params.count.unwrap_or(3);
+                terminal
+                    .mouse_scroll(params.row, params.col, direction, count)
+                    .await?;
                 Ok(Response::ok_empty(id))
             }
             "wait_for_text" => {

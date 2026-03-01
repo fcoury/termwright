@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 
 use crate::daemon::protocol::*;
 use crate::error::{Result, TermwrightError};
-use crate::input::MouseButton;
+use crate::input::{MouseButton, ScrollDirection};
 use crate::screen::Screen;
 
 pub struct DaemonClient {
@@ -130,6 +130,26 @@ impl DaemonClient {
                 row,
                 col,
                 button: Some(button.to_string()),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn mouse_scroll(
+        &self,
+        row: u16,
+        col: u16,
+        direction: ScrollDirection,
+        count: Option<u16>,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "mouse_scroll",
+            MouseScrollParams {
+                row,
+                col,
+                direction: direction.to_string(),
+                count,
             },
         )
         .await?;

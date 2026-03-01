@@ -6,7 +6,7 @@
 
 pub use crate::daemon::client::DaemonClient;
 pub use crate::error::{Result, TermwrightError};
-pub use crate::input::{Key, MouseButton};
+pub use crate::input::{Key, MouseButton, ScrollDirection};
 pub use crate::output::{Screenshot, ScreenshotConfig};
 pub use crate::screen::{
     BoxStyle, Cell, CellAttributes, Color, DetectedBox, Position, Region, Screen, Size, TextMatch,

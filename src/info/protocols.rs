@@ -195,6 +195,15 @@ fn all_methods() -> Vec<MethodInfo> {
             example_request: r#"{"id":1,"method":"mouse_move","params":{"row":5,"col":10}}"#,
             example_response: r#"{"id":1,"result":null}"#,
         },
+        MethodInfo {
+            name: "mouse_scroll",
+            category: "input",
+            brief: "Scroll mouse wheel at position",
+            params: r#"{row: number, col: number, direction: "up"|"down", count?: number}"#,
+            response: "null",
+            example_request: r#"{"id":1,"method":"mouse_scroll","params":{"row":5,"col":10,"direction":"down","count":3}}"#,
+            example_response: r#"{"id":1,"result":null}"#,
+        },
         // Wait
         MethodInfo {
             name: "wait_for_text",

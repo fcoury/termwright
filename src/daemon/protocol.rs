@@ -131,6 +131,14 @@ pub struct MouseClickParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct MouseScrollParams {
+    pub row: u16,
+    pub col: u16,
+    pub direction: String,
+    pub count: Option<u16>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WaitForTextParams {
     pub text: String,
     pub timeout_ms: Option<u64>,
