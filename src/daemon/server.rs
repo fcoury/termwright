@@ -365,6 +365,26 @@ async fn handle_request(terminal: &Terminal, req: Request) -> Response {
                     .map_err(|e| TermwrightError::Protocol(format!("invalid regex: {}", e)))?;
                 Ok(Response::ok(id, matches)?)
             }
+            "detect_boxes" => {
+                let screen = terminal.screen().await;
+                let boxes = screen.detect_boxes();
+                Ok(Response::ok(id, boxes)?)
+            }
+            "wait_for_cursor_at" => {
+                let params: WaitForCursorAtParams = serde_json::from_value(req.params)
+                    .map_err(|e| TermwrightError::Protocol(e.to_string()))?;
+                let position = crate::screen::Position {
+                    row: params.row,
+                    col: params.col,
+                };
+                let builder = terminal.wait_cursor(position);
+                if let Some(timeout_ms) = params.timeout_ms {
+                    builder.timeout(Duration::from_millis(timeout_ms)).await?;
+                } else {
+                    builder.await?;
+                }
+                Ok(Response::ok_empty(id))
+            }
             "wait_for_exit" => {
                 let params: WaitForExitParams = serde_json::from_value(req.params)
                     .map_err(|e| TermwrightError::Protocol(e.to_string()))?;

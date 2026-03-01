@@ -275,6 +275,28 @@ impl DaemonClient {
         Ok(())
     }
 
+    pub async fn detect_boxes(&self) -> Result<Vec<crate::screen::DetectedBox>> {
+        self.call("detect_boxes", serde_json::Value::Null).await
+    }
+
+    pub async fn wait_for_cursor_at(
+        &self,
+        row: u16,
+        col: u16,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        self.call::<_, serde_json::Value>(
+            "wait_for_cursor_at",
+            WaitForCursorAtParams {
+                row,
+                col,
+                timeout_ms: timeout.map(|d| d.as_millis() as u64),
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn wait_for_exit(&self, timeout: Option<Duration>) -> Result<i32> {
         let res: WaitForExitResult = self
             .call(

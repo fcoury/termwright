@@ -67,6 +67,16 @@ impl CapabilitiesInfo {
                     description: "findText/findPattern with position results",
                     available: true,
                 },
+                FeatureInfo {
+                    name: "box_detection",
+                    description: "detect_boxes for TUI panel discovery",
+                    available: true,
+                },
+                FeatureInfo {
+                    name: "cursor_wait",
+                    description: "wait_for_cursor_at position tracking",
+                    available: true,
+                },
             ],
         }
     }

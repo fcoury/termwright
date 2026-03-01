@@ -205,6 +205,13 @@ pub struct FindPatternParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct WaitForCursorAtParams {
+    pub row: u16,
+    pub col: u16,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StatusResult {
     pub exited: bool,
     pub exit_code: Option<i32>,
